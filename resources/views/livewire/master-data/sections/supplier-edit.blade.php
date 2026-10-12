@@ -110,7 +110,23 @@
             </x-suppliers.form-card>
 
             @if(auth()->user()->canModule('suppliers', 'manage'))
-                <x-suppliers.form-card title="Supplier portal access" copy="Create or update the supplier login in the isolated portal. This account is linked automatically to this FlowTracker supplier ID. Passwords are never saved in FlowTracker.">
+                @php $portalLinked = (bool) data_get($supplier->metadata, 'portal_linked_at'); @endphp
+                <section class="ft-supplier-form-card ft-supplier-portal-card" aria-labelledby="ft-supplier-portal-heading" x-data="{ showPassword: false, showConfirmation: false }">
+                    <div class="ft-supplier-portal-heading">
+                        <div>
+                            <h2 id="ft-supplier-portal-heading">Supplier portal access</h2>
+                            <p>Manage the supplier's login details and portal access.</p>
+                        </div>
+                        <span class="ft-supplier-portal-status {{ $portalLinked ? 'is-linked' : 'is-unlinked' }}">
+                            @if($portalLinked)
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8 12 2.5 2.5L16 9"/></svg>
+                                Account linked
+                            @else
+                                Account not linked
+                            @endif
+                        </span>
+                    </div>
+
                     <div class="ft-supplier-form-grid">
                         <x-suppliers.field label="Portal username" required error="portalUsername">
                             <input wire:model="portalUsername" type="text" maxlength="60" autocomplete="off" placeholder="supplier.username">
@@ -118,21 +134,78 @@
                         <x-suppliers.field label="Portal email" required error="portalEmail">
                             <input wire:model="portalEmail" type="email" maxlength="254" autocomplete="off" placeholder="supplier@example.com">
                         </x-suppliers.field>
-                        <x-suppliers.field label="New portal password" required error="portalPassword" wide>
-                            <input wire:model="portalPassword" type="password" autocomplete="new-password" placeholder="At least 12 characters, mixed case and a number">
+                    </div>
+                    <p class="ft-supplier-portal-linked-supplier">Linked supplier: <strong>{{ $supplier->id }} · {{ $supplier->supplierShortCode() }}</strong></p>
+
+                    <div class="ft-supplier-portal-password-header">
+                        <div>
+                            <div class="ft-supplier-portal-password-title">
+                                <h3>Password</h3>
+                                @if($portalLinked)<span>Password set</span>@endif
+                            </div>
+                            <p>Existing passwords cannot be viewed. Send a reset link or set a new password.</p>
+                        </div>
+                        @if($portalLinked)
+                            <button type="button" class="ft-supplier-secondary-button ft-supplier-portal-reset"
+                                wire:click="sendSupplierPortalPasswordReset"
+                                wire:loading.attr="disabled"
+                                wire:target="sendSupplierPortalPasswordReset">
+                                <span wire:loading.remove wire:target="sendSupplierPortalPasswordReset">Send password reset link</span>
+                                <span wire:loading wire:target="sendSupplierPortalPasswordReset">Sending…</span>
+                            </button>
+                        @endif
+                    </div>
+
+                    <div class="ft-supplier-form-grid ft-supplier-portal-password-fields">
+                        <x-suppliers.field :label="$portalLinked ? 'New password (optional)' : 'New password'" :required="!$portalLinked" error="portalPassword">
+                            <div class="ft-supplier-portal-password-input">
+                                <input wire:model="portalPassword" x-bind:type="showPassword ? 'text' : 'password'"
+                                    autocomplete="new-password" minlength="8" placeholder="Enter a new password">
+                                <button type="button" x-on:click="showPassword = !showPassword"
+                                    x-bind:aria-label="showPassword ? 'Hide new password' : 'Show new password'"
+                                    x-bind:aria-pressed="showPassword" aria-label="Show new password">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="2.5"/></svg>
+                                </button>
+                            </div>
+                        </x-suppliers.field>
+                        <x-suppliers.field label="Confirm new password" :required="!$portalLinked" error="portalPasswordConfirmation">
+                            <div class="ft-supplier-portal-password-input">
+                                <input wire:model="portalPasswordConfirmation" x-bind:type="showConfirmation ? 'text' : 'password'"
+                                    autocomplete="new-password" minlength="8" placeholder="Re-enter new password">
+                                <button type="button" x-on:click="showConfirmation = !showConfirmation"
+                                    x-bind:aria-label="showConfirmation ? 'Hide confirmation password' : 'Show confirmation password'"
+                                    x-bind:aria-pressed="showConfirmation" aria-label="Show confirmation password">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="2.5"/></svg>
+                                </button>
+                            </div>
                         </x-suppliers.field>
                     </div>
-                    <p>Linked FlowTracker supplier ID: <strong>{{ $supplier->id }}</strong> · {{ $supplier->supplierShortCode() }}</p>
-                    @if(data_get($supplier->metadata, 'portal_linked_at'))
-                        <p>Current portal account: <strong>{{ data_get($supplier->metadata, 'portal_username') }}</strong> ({{ data_get($supplier->metadata, 'portal_email') }})</p>
-                    @else
-                        <p>No portal login created from FlowTracker yet.</p>
-                    @endif
-                    <button type="button" class="ft-supplier-primary-button" wire:click="provisionSupplierPortal" wire:loading.attr="disabled" wire:target="provisionSupplierPortal">Create / update portal login</button>
-                </x-suppliers.form-card>
+                    <p class="ft-supplier-portal-password-help">
+                        @if($portalLinked)Leave blank to keep the existing password.@else Set an initial password to create the account.@endif
+                        Use at least 8 characters.
+                    </p>
+                    <div class="ft-supplier-portal-footer">
+                        <label class="ft-supplier-portal-change-check">
+                            <input type="checkbox" wire:model="portalRequirePasswordChange">
+                            <span>
+                                <strong>Require password change at next login</strong>
+                                <small>Applies when an administrator sets a new password.</small>
+                            </span>
+                        </label>
+                        <button type="button" class="ft-supplier-primary-button" wire:click="provisionSupplierPortal"
+                            wire:loading.attr="disabled" wire:target="provisionSupplierPortal,sendSupplierPortalPasswordReset">
+                            <span wire:loading.remove wire:target="provisionSupplierPortal">Save portal access</span>
+                            <span wire:loading wire:target="provisionSupplierPortal">Saving…</span>
+                        </button>
+                    </div>
+                    @error('portalAccess')<div role="alert" class="validation-error ft-supplier-portal-error">{{ $message }}</div>@enderror
+                </section>
             @endif
             @error('portalSync') <div role="alert" class="flash error">{{ $message }}</div> @enderror
-            <button type="button" class="ft-supplier-secondary-button" wire:click="syncSupplierPortal" wire:loading.attr="disabled" wire:target="syncSupplierPortal">Sync supplier &amp; assigned products</button>
+            <button type="button" class="ft-supplier-secondary-button ft-supplier-sync-button" wire:click="syncSupplierPortal" wire:loading.attr="disabled" wire:target="syncSupplierPortal">
+                <span wire:loading.remove wire:target="syncSupplierPortal">Sync supplier &amp; assigned products</span>
+                <span wire:loading wire:target="syncSupplierPortal">Synchronizing…</span>
+            </button>
 
             <div class="ft-supplier-create-actions">
                 <button type="button" class="ft-supplier-secondary-button" wire:click="cancelSupplierEdit">Cancel</button>

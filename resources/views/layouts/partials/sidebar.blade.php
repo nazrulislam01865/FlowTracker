@@ -209,6 +209,7 @@
         <div class="sidebar-section ft-sidebar-section-line"><span>Administration</span></div>
         @if($user->canAccess('notifications.view'))<x-ui.nav-link route="notifications" label="Notifications" :badge="$unread" icon="notifications" />@endif
         @if(app(\App\Services\AccessControlService::class)->isAdministrator($user))
+            <x-ui.nav-link route="supplier-prices.index" label="Supplier Products & Prices" icon="products" />
             <x-ui.nav-link route="supplier-reminder.index" label="Reminder Setup" icon="notifications" />
         @endif
         {{-- Inquiry and Order workflows share Workflow Setup; reusable Task Packs remain a separate administration screen. --}}

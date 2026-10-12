@@ -164,6 +164,7 @@ trait ManagesProductTaxonomyCreation
             $this->productClientIds = [];
         }
         $this->resetValidation('productClientIds');
+        $this->syncProductClientPriceRowsForSelectedClients();
     }
 
     private function productCodeReadyForCategory(): bool

@@ -36,7 +36,7 @@ class ProductCreationSequenceTest extends TestCase
 
         $this->assertStringContainsString('Generated automatically after the product is created.', $form);
         $this->assertStringContainsString('wire:model.blur="productReferenceCode"', $form);
-        $this->assertSame(4, substr_count($form, '<x-ui.search-select'));
+        $this->assertSame(5, substr_count($form, '<x-ui.search-select'));
         $this->assertStringContainsString('label="Main category"', $form);
         $this->assertStringContainsString('label="Product category"', $form);
         $this->assertStringContainsString('label="Subcategory"', $form);

@@ -61,6 +61,44 @@ class ReverbChannelService
         $this->triggerChannels([$this->workspaceChannel($workspaceId)], $event, $payload);
     }
 
+    public function authenticateSupplierOrder(
+        string $socketId, string $channelName, int $supplierId, int $orderId,
+    ): array {
+        abort_unless($this->enabled(), 503);
+        $expected = 'private-flowtrack.supplier.'.$supplierId.'.order.'.$orderId;
+        abort_unless($supplierId > 0 && $orderId > 0 && hash_equals($expected, $channelName), 403);
+        abort_unless(preg_match('/^\d+\.\d+$/', $socketId), 422);
+        return ['auth' => $this->key().':'.hash_hmac(
+            'sha256', $socketId.':'.$expected, $this->secret(),
+        )];
+    }
+
+    /** Supplier-specific private channel; payload is only a refresh hint. */
+    public function triggerSupplierOrder(int $supplierId, int $orderId): void
+    {
+        if ($supplierId < 1 || $orderId < 1) return;
+        $this->triggerChannels([
+            'private-flowtrack.supplier.'.$supplierId.'.order.'.$orderId,
+        ], 'flowtrack.supplier.order.updated', ['changed' => true]);
+    }
+
+    public function authenticateSupplierCatalog(string $socketId, string $channelName, int $supplierId): array
+    {
+        abort_unless($this->enabled(), 503);
+        $expected = 'private-flowtrack.supplier.'.$supplierId.'.catalog';
+        abort_unless($supplierId > 0 && hash_equals($expected, $channelName), 403);
+        abort_unless(preg_match('/^\d+\.\d+$/', $socketId), 422);
+        return ['auth' => $this->key().':'.hash_hmac('sha256', $socketId.':'.$expected, $this->secret())];
+    }
+
+    /** Notify only this supplier; the event never contains prices or customer data. */
+    public function triggerSupplierCatalog(int $supplierId): void
+    {
+        if ($supplierId < 1) return;
+        $this->triggerChannels(['private-flowtrack.supplier.'.$supplierId.'.catalog'],
+            'flowtrack.supplier.catalog.updated', ['changed' => true]);
+    }
+
     private function triggerChannels(array $channels, string $event, array $payload): void
     {
         if (! $this->enabled() || Cache::get($this->circuitKey())) {

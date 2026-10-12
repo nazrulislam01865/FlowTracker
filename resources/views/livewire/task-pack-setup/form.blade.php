@@ -102,9 +102,18 @@
                         @if($optionsReady)
                             <div class="ft-task-prototype-grid" wire:key="task-pack-options-{{ $index }}">
                                 <div class="ft-admin-field">
+                                    <label for="taskpack-assignee-type-{{ $index }}">Default assignee</label>
+                                    <select id="taskpack-assignee-type-{{ $index }}" wire:model.live="tasks.{{ $index }}.default_assignee_type">
+                                        <option value="user">Internal user</option>
+                                        <option value="supplier">Supplier</option>
+                                    </select>
+                                    <small>Supplier uses the assigned order product supplier when there is exactly one. Available for the first five Order stages.</small>
+                                </div>
+                                @if(($task['default_assignee_type'] ?? 'user') !== 'supplier')
+                                <div class="ft-admin-field">
                                     <x-ui.search-select
                                         class="ft-taskpack-assignee-filter"
-                                        label="Default assignee"
+                                        label="Internal user"
                                         property="tasks.{{ $index }}.default_assignee_id"
                                         type="users"
                                         context="task-pack-setup"
@@ -119,7 +128,9 @@
                                     />
                                     @error("tasks.$index.default_assignee_id")<div class="validation-error">{{ $message }}</div>@enderror
                                 </div>
+                                @endif
 
+                                @if(($task['default_assignee_type'] ?? 'user') !== 'supplier')
                                 <div class="ft-admin-field">
                                     <x-ui.search-select
                                         class="ft-taskpack-assignee-filter"
@@ -138,6 +149,8 @@
                                     />
                                     @error("tasks.$index.default_department_id")<div class="validation-error">{{ $message }}</div>@enderror
                                 </div>
+
+                                @endif
 
                                 <div class="ft-admin-field">
                                     <label>Priority</label>

@@ -104,6 +104,7 @@ trait ManagesInquiryCreation
         ], auth()->user());
 
         $this->clientId = (int) $client->id;
+        $this->refreshCreateInquiryClientPrices();
         $this->selectedClientLabel = (string) $client->name;
         $this->clientContact = $this->useNewClientContactForInquiry
             ? (string) ($client->contact_name ?: '')
@@ -214,6 +215,7 @@ trait ManagesInquiryCreation
 
     public function updatedClientId($value): void
     {
+        $this->refreshCreateInquiryClientPrices();
         $this->resetValidation(['clientId', 'clientContact']);
         if (!$this->showCreate || !$value) {
             $this->clientContact = '';
@@ -272,6 +274,7 @@ trait ManagesInquiryCreation
             abort_unless($selected, 422, 'That option is no longer available.');
 
             $this->clientId = $id;
+            $this->refreshCreateInquiryClientPrices();
             $this->selectedClientLabel = (string) ($selected['label'] ?? '');
             $this->resetValidation(['clientId', 'clientContact']);
             $client = app(\App\Services\ClientService::class)->referenceQuery($user, 'create-inquiry')
@@ -452,13 +455,14 @@ trait ManagesInquiryCreation
 
         $catalogInvalid = false;
         $workspaceId = app(MasterDataService::class)->workspaceId();
+        $clientId = (int) $data['clientId'];
+        $products = MasterRecord::query()
+            ->forWorkspace($workspaceId)->ofType('product')->active()
+            ->with(['parent:id,name,status,type', 'clientPrices' => fn ($query) => $query->where('client_id', $clientId)])
+            ->whereIn('id', collect($data['createProductRows'])->pluck('product_id')->map(fn ($id) => (int) $id)->unique()->all())
+            ->get()->keyBy('id');
         foreach ($data['createProductRows'] as $index => $row) {
-            $product = MasterRecord::query()
-                ->forWorkspace($workspaceId)
-                ->ofType('product')
-                ->active()
-                ->with('parent:id,name,status,type')
-                ->find((int) $row['product_id']);
+            $product = $products->get((int) $row['product_id']);
 
             $valid = $product
                 && $product->parent
@@ -477,7 +481,7 @@ trait ManagesInquiryCreation
             // Re-resolve it at save time so the stored base price always follows
             // the Product quantity price table, even if browser state is stale.
             $quantity = (int) ($row['quantity'] ?? 0);
-            $basePrice = $product->productPriceForQuantity($quantity);
+            $basePrice = $product->productPriceForQuantity($quantity, (int) $data['clientId']);
             $data['createProductRows'][$index]['unit_price'] = $basePrice !== null
                 ? round($basePrice, 2)
                 : null;

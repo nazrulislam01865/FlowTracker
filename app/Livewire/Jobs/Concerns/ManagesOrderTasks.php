@@ -42,11 +42,19 @@ trait ManagesOrderTasks
                 ->with([
                     'assignee:id,name,profile_image_path',
                     'job.members',
+                    'phase:id,sequence',
+                    'setupTemplate',
                 ])
                 ->findOrFail($taskId);
+            if ($assigneeId === 'supplier') {
+                app(\App\Services\SupplierBridge\SupplierDefaultTaskAssigner::class)->assignExplicitly($task, $actor);
+                $updatedTask = $task->refresh();
+                return;
+            }
             $assigneeId = $assigneeId === '' ? null : (int) $assigneeId;
             $assignee = $assigneeId ? User::where('is_active', true)->findOrFail($assigneeId) : null;
             $updatedTask = app(TaskService::class)->updateAssignee($task, $assignee, $actor);
+            app(\App\Services\SupplierBridge\SupplierDefaultTaskAssigner::class)->clearForTask($updatedTask);
         });
 
         if (($result['ok'] ?? false) && $updatedTask) {
@@ -525,12 +533,12 @@ trait ManagesOrderTasks
         // Re-query only when a caller supplies an id; otherwise keep the same
         // request-local model and load just the relation required by the payload.
         $task = $task instanceof Task ? $task : Task::query()->findOrFail($task);
-        $task->loadMissing('assignee:id,name,profile_image_path');
+        $task->loadMissing('assignee:id,name,profile_image_path', 'supplierAssignment');
 
         $payload = [
             'taskId' => (int) $task->id,
-            'assigneeId' => $task->assignee_id ? (int) $task->assignee_id : '',
-            'assigneeName' => (string) ($task->assignee?->name ?: 'Unassigned'),
+            'assigneeId' => $task->supplierAssignment ? 'supplier' : ($task->assignee_id ? (int) $task->assignee_id : ''),
+            'assigneeName' => (string) ($task->supplierAssignment ? 'Supplier' : ($task->assignee?->name ?: 'Unassigned')),
             'avatarUrl' => (string) ($task->assignee?->profileImageUrl() ?? ''),
         ];
 

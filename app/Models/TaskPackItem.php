@@ -13,6 +13,7 @@ class TaskPackItem extends Model
         'title',
         'description',
         'default_assignee_id',
+        'default_assignee_type',
         'default_department_id',
         'priority_id',
         'document_category_id',

@@ -45,7 +45,7 @@ trait ManagesInquiryProducts
         }
 
         $quantity = max(1, (int) round((float) ($item->quantity ?? 1)));
-        $basePrice = $product?->productPriceForQuantity($quantity);
+        $basePrice = $product?->productPriceForQuantity($quantity, (int) $inquiry->client_id);
 
         $this->editInquiryProductItemId = (int) $item->id;
         $this->editInquiryProductSelectedId = $product ? (int) $product->id : null;
@@ -137,7 +137,7 @@ trait ManagesInquiryProducts
 
         $product = app(\App\Services\ProductCatalogService::class)->findActiveProductOrFail($productId);
         $quantity = max(1, (int) $this->editInquiryProductQuantity);
-        $basePrice = $product->productPriceForQuantity($quantity);
+        $basePrice = $product->productPriceForQuantity($quantity, (int) $inquiry->client_id);
 
         $this->editInquiryProductSelectedId = (int) $product->id;
         $this->editInquiryProductSearch = (string) $product->name;
@@ -170,7 +170,7 @@ trait ManagesInquiryProducts
 
         $product = app(\App\Services\ProductCatalogService::class)
             ->findActiveProductOrFail((int) $this->editInquiryProductSelectedId);
-        $basePrice = $product->productPriceForQuantity($quantity);
+        $basePrice = $product->productPriceForQuantity($quantity, (int) $this->selectedInquiry()->client_id);
         $this->editInquiryProductUnitPrice = $basePrice !== null
             ? number_format((float) $basePrice, 2, '.', '')
             : '0.00';
@@ -240,7 +240,7 @@ trait ManagesInquiryProducts
             $item = $item->refresh();
         }
 
-        $basePrice = $product->productPriceForQuantity($quantity);
+        $basePrice = $product->productPriceForQuantity($quantity, (int) $inquiry->client_id);
         $unitPrice = round((float) ($basePrice ?? $data['editInquiryProductUnitPrice']), 2);
         $currentUnitPrice = $item->unit_price !== null ? round((float) $item->unit_price, 2) : null;
         if ($unitPrice !== $currentUnitPrice) {
@@ -388,7 +388,7 @@ trait ManagesInquiryProducts
         }
 
         $defaultQuantity = 1000;
-        $basePrice = $product->productPriceForQuantity($defaultQuantity);
+        $basePrice = $product->productPriceForQuantity($defaultQuantity, (int) $inquiry->client_id);
 
         $this->inquiryProductSelectedId = (int) $product->id;
         $this->inquiryProductCategory = $category !== '' ? $category : 'Uncategorized';
@@ -419,7 +419,7 @@ trait ManagesInquiryProducts
 
         $product = app(\App\Services\ProductCatalogService::class)
             ->findActiveProductOrFail((int) $this->inquiryProductSelectedId);
-        $basePrice = $product->productPriceForQuantity($quantity);
+        $basePrice = $product->productPriceForQuantity($quantity, (int) $this->selectedInquiry()->client_id);
         $this->inquiryProductUnitPrice = $basePrice !== null
             ? number_format((float) $basePrice, 2, '.', '')
             : '0.00';
@@ -471,7 +471,7 @@ trait ManagesInquiryProducts
             return;
         }
 
-        $basePrice = $product->productPriceForQuantity((int) $data['inquiryProductQuantity']);
+        $basePrice = $product->productPriceForQuantity((int) $data['inquiryProductQuantity'], (int) $inquiry->client_id);
         $resolvedUnitPrice = $basePrice !== null
             ? (float) $basePrice
             : (float) $data['inquiryProductUnitPrice'];

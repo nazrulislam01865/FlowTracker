@@ -28,6 +28,8 @@ trait ManagesSupplierDetails
     public string $portalUsername = '';
     public string $portalEmail = '';
     public string $portalPassword = '';
+    public string $portalPasswordConfirmation = '';
+    public bool $portalRequirePasswordChange = true;
 
 
     public function mountSupplierDetails(): void
@@ -173,9 +175,10 @@ trait ManagesSupplierDetails
             return $updated;
         });
 
+        app(\App\Services\SupplierBridge\MarkCatalogDirty::class)->supplierIds($workspaceId, [(int) $supplier->id]);
         if (config('supplier_bridge.enabled')) {
             try {
-                app(\App\Services\SupplierBridge\SyncSupplier::class)->sync((int) $supplier->id);
+                app(\App\Services\SupplierBridge\SendCatalogImmediately::class)->send((int) $supplier->id);
             } catch (\Throwable $exception) {
                 session()->flash('warning', 'Supplier saved in FlowTracker. Portal sync is pending; use Sync supplier & products to retry.');
             }
@@ -187,28 +190,43 @@ trait ManagesSupplierDetails
         ], navigate: true);
     }
 
-    /** Only FlowTracker administrators with Suppliers: Manage may issue or replace supplier credentials. */
+    /** Manage the linked account without replacing its password on ordinary detail edits. */
     public function provisionSupplierPortal(): void
     {
         abort_unless($this->group === 'supplier' && $this->supplierEditId, 404);
         abort_unless(auth()->user()?->canModule('suppliers', 'manage'), 403);
         $supplier = $this->supplierRecord($this->supplierEditId);
         if ($supplier->status !== 'active') {
-            $this->addError('portalUsername', 'Activate the supplier before creating portal access.');
+            $this->addError('portalUsername', 'Activate the supplier before managing portal access.');
             return;
         }
+
+        $linked = (bool) data_get($supplier->metadata, 'portal_linked_at');
         $values = $this->validate([
             'portalUsername' => ['required', 'string', 'regex:/^[A-Za-z0-9._-]+$/', 'min:3', 'max:60'],
             'portalEmail' => ['required', 'email:rfc', 'max:254'],
-            'portalPassword' => ['required', 'string', \Illuminate\Validation\Rules\Password::min(12)->letters()->mixedCase()->numbers()],
+            'portalPassword' => [
+                $linked ? 'nullable' : 'required', 'string',
+                \Illuminate\Validation\Rules\Password::min(8),
+            ],
+            'portalPasswordConfirmation' => ['required_with:portalPassword', 'same:portalPassword'],
+            'portalRequirePasswordChange' => ['boolean'],
+        ], [
+            'portalPassword.required' => 'Set an initial password to create the portal login.',
+            'portalPasswordConfirmation.required_with' => 'Confirm the new password.',
+            'portalPasswordConfirmation.same' => 'The passwords do not match.',
         ]);
+
+        $newPassword = $values['portalPassword'] ?? '';
         try {
             app(\App\Services\SupplierBridge\SyncSupplier::class)->provision(
                 (int) $supplier->id,
                 strtolower(trim($values['portalUsername'])),
                 strtolower(trim($values['portalEmail'])),
-                $values['portalPassword'],
+                $newPassword !== '' ? $newPassword : null,
                 trim((string) data_get($supplier->metadata, 'contact_person')) ?: $supplier->name,
+                $newPassword !== '' && (bool) $values['portalRequirePasswordChange'],
+                ! $linked,
             );
             $metadata = (array) ($supplier->metadata ?? []);
             $metadata['portal_username'] = strtolower(trim($values['portalUsername']));
@@ -216,12 +234,36 @@ trait ManagesSupplierDetails
             $metadata['portal_linked_at'] = now()->toIso8601String();
             $supplier->update(['metadata' => $metadata]);
             $this->portalPassword = '';
-            session()->flash('success', 'Supplier portal account linked to '.$supplier->supplierShortCode().' (FlowTracker ID '.$supplier->id.').');
-            $this->redirectRoute('master-data', ['group' => 'supplier', 'supplier' => $supplier->id], navigate: true);
+            $this->portalPasswordConfirmation = '';
+            session()->flash('success', 'Supplier portal access saved. Existing password retained unless changed.');
+            $this->redirectRoute('master-data', ['group' => 'supplier', 'edit_supplier' => $supplier->id], navigate: true);
         } catch (\Throwable $exception) {
-            // Never expose a password or raw HTTP response in the UI.
+            // Discard secrets even when the remote portal is unavailable.
             $this->portalPassword = '';
-            $this->addError('portalUsername', $exception instanceof \RuntimeException ? $exception->getMessage() : 'Supplier portal is unavailable. Check the API connection and retry.');
+            $this->portalPasswordConfirmation = '';
+            $this->addError('portalAccess', $exception instanceof \RuntimeException
+                ? $exception->getMessage()
+                : 'Supplier portal is unavailable. Check the API connection and retry.');
+        }
+    }
+
+    /** The portal emails a one-use reset link; FlowTracker never receives the token. */
+    public function sendSupplierPortalPasswordReset(): void
+    {
+        abort_unless($this->group === 'supplier' && $this->supplierEditId, 404);
+        abort_unless(auth()->user()?->canModule('suppliers', 'manage'), 403);
+        $supplier = $this->supplierRecord($this->supplierEditId);
+        if (! data_get($supplier->metadata, 'portal_linked_at')) {
+            $this->addError('portalAccess', 'Create the supplier portal account before requesting a reset.');
+            return;
+        }
+        try {
+            app(\App\Services\SupplierBridge\SyncSupplier::class)->sendPasswordReset((int) $supplier->id);
+            session()->flash('success', 'Password reset instructions were sent to the linked portal email.');
+        } catch (\Throwable $exception) {
+            $this->addError('portalAccess', $exception instanceof \RuntimeException
+                ? $exception->getMessage()
+                : 'Could not send the reset link. Verify portal email delivery and retry.');
         }
     }
 
@@ -231,13 +273,13 @@ trait ManagesSupplierDetails
         $this->authorizeGroupAction('edit', 'supplier');
         $supplier = $this->supplierRecord((int) ($this->supplierEditId ?: $this->supplierViewId));
         try {
-            if (app(\App\Services\SupplierBridge\SyncSupplier::class)->sync((int) $supplier->id)) {
-                session()->flash('success', 'Supplier and assigned products synchronized with the portal.');
-            } else {
-                session()->flash('warning', 'Supplier sync skipped: no assigned products.');
-            }
+            app(\App\Services\SupplierBridge\SendCatalogImmediately::class)->send((int) $supplier->id);
+            session()->flash('success', 'Supplier and assigned products synchronized with the portal.');
         } catch (\Throwable $exception) {
-            $this->addError('portalSync', 'Supplier sync failed. Verify that both APIs are running and bridge secrets match.');
+            report($exception);
+            $this->addError('portalSync', $exception instanceof \RuntimeException
+                ? 'Supplier sync failed: '.$exception->getMessage()
+                : 'Supplier sync failed. Check the FlowTracker log and Supplier Portal API.');
         }
     }
 
@@ -264,6 +306,8 @@ trait ManagesSupplierDetails
         $this->portalUsername = (string) data_get($supplier->metadata, 'portal_username', '');
         $this->portalEmail = (string) data_get($supplier->metadata, 'portal_email', '');
         $this->portalPassword = '';
+        $this->portalPasswordConfirmation = '';
+        $this->portalRequirePasswordChange = true;
         $this->resetValidation();
     }
 

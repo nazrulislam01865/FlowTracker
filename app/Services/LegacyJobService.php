@@ -2493,7 +2493,7 @@ class LegacyJobService
         abort_unless($validSupplier, 422, 'Select an active supplier for this product.');
 
         $quantity = max(1, (int) ($data['quantity'] ?? 1));
-        $basePrice = $product->productPriceForQuantity($quantity);
+        $basePrice = $product->productPriceForQuantity($quantity, (int) $job->client_id);
         $fallbackPrice = $data['unit_price'] ?? 0;
         abort_unless(is_numeric($fallbackPrice), 422, 'Unit price must be a number.');
         $unitPrice = round(max(0, (float) ($basePrice ?? $fallbackPrice)), 2);
@@ -2762,6 +2762,13 @@ class LegacyJobService
 
         foreach ($job->workflow->phases as $phase) {
             $this->syncPhaseTaskPack($job, $phase, false, $actor);
+        }
+        // Avoid any supplier-assignment queries for Task Packs that only use
+        // internal assignees (the common path).
+        if ($job->workflow->phases->contains(fn ($phase) => $phase->taskPack?->items?->contains(
+            fn ($item) => ($item->default_assignee_type ?? 'user') === 'supplier'
+        ))) {
+            app(\App\Services\SupplierBridge\SupplierDefaultTaskAssigner::class)->syncForOrder($job, $actor);
         }
     }
 
@@ -3208,7 +3215,7 @@ class LegacyJobService
 
         foreach ($templates as $template) {
             $assignee = $template->defaultAssignee;
-            if (!$assignee && $template->defaultDepartment) {
+            if (!$assignee && ($template->default_assignee_type ?? 'user') !== 'supplier' && $template->defaultDepartment) {
                 $legacyDepartmentId = (int) ($departmentIdsByCode->get($template->defaultDepartment->code) ?: 0);
                 $assignee = $legacyDepartmentId ? $fallbackUsersByDepartment->get($legacyDepartmentId) : null;
             }

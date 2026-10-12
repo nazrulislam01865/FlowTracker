@@ -36,6 +36,14 @@ final class DeliverOrder
                 throw new RuntimeException('Supplier bridge is not securely configured.');
             }
 
+            // Resolve Task Pack supplier defaults just before delivery. The
+            // initial order notification may precede generation of every task;
+            // keep projection construction itself read-only.
+            $order = \App\Models\FlowJob::query()->find((int) $delivery->flow_job_id);
+            if ($order && strcasecmp((string) $order->status, 'Draft') !== 0) {
+                app(SupplierDefaultTaskAssigner::class)->syncForOrder($order);
+            }
+
             // Rebuild at delivery time so retries also carry current stage, files and assigned lines.
             $snapshotAt = now();
             $snapshot = app(SupplierOrderProjection::class)->build(
@@ -69,11 +77,31 @@ final class DeliverOrder
             if (! $response->successful()) {
                 throw new RuntimeException('Supplier service returned HTTP '.$response->status());
             }
+            // A 200 response must mean the newer projection was actually
+            // persisted. Never mark an ignored stale revision as delivered.
+            if ($response->json('applied') === false) {
+                throw new RuntimeException('Supplier service rejected an older workflow revision.');
+            }
 
-            DB::table('supplier_order_deliveries')->where('id', $id)->update([
+            // A workflow/task change during the HTTP request marks this
+            // delivery pending again. Do not erase that newer work when the
+            // in-flight snapshot succeeds.
+            $applied = DB::table('supplier_order_deliveries')->where('id', $id)
+                ->where('status', 'sending')->update([
                 'status' => 'delivered', 'delivered_at' => $snapshotAt, 'locked_at' => null,
                 'last_error' => null, 'updated_at' => now(),
             ]);
+            if ($applied === 1) {
+                try {
+                    app(\App\Services\ReverbChannelService::class)->triggerSupplierOrder(
+                        (int) $delivery->supplier_id, (int) $delivery->flow_job_id,
+                    );
+                } catch (\Throwable $exception) {
+                    // Realtime is best-effort: do not retry an already accepted
+                    // signed snapshot when the WebSocket server is unavailable.
+                    Log::warning('Supplier realtime notification unavailable.', ['delivery_id' => $id]);
+                }
+            }
             return true;
         } catch (\Throwable $exception) {
             $attempts = (int) $delivery->attempts + 1;

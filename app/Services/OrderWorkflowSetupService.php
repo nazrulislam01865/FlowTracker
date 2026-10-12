@@ -388,6 +388,7 @@ class OrderWorkflowSetupService
                     'description' => $item->description,
                     'color' => $item->color ?? '#2563EB',
                     'default_assignee_id' => $item->default_assignee_id,
+                    'default_assignee_type' => $item->default_assignee_type ?: 'user',
                     'default_department_id' => $item->default_department_id,
                     'priority_id' => $item->priority_id,
                     'document_category_id' => $item->document_category_id,

@@ -53,6 +53,11 @@ class Task extends Model
         ];
     }
 
+    public function supplierAssignment(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(SupplierTaskAssignment::class, 'task_id');
+    }
+
     public function job(): BelongsTo
     {
         return $this->belongsTo(FlowJob::class, 'flow_job_id');

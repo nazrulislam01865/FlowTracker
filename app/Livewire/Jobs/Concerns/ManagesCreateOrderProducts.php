@@ -17,6 +17,29 @@ use Throwable;
  */
 trait ManagesCreateOrderProducts
 {
+    /** Refresh all visible product prices when the selected client changes. */
+    private function refreshCreateOrderClientPrices(): void
+    {
+        if (!$this->showCreate || $this->jobItems === []) return;
+        $clientId = (int) ($this->clientId ?: 0);
+        $productIds = collect($this->jobItems)->pluck('product_id')->map(fn ($id) => (int) $id)
+            ->filter()->unique()->values();
+        if ($productIds->isEmpty()) return;
+        $products = MasterRecord::query()
+            ->forWorkspace(app(MasterDataService::class)->workspaceId())
+            ->ofType('product')->active()
+            ->whereIn('id', $productIds)
+            ->with(['clientPrices' => fn ($query) => $query->where('client_id', $clientId)])
+            ->get(['id', 'type', 'metadata'])->keyBy('id');
+        foreach ($this->jobItems as $index => $row) {
+            $product = $products->get((int) ($row['product_id'] ?? 0));
+            $quantity = (int) ($row['quantity'] ?? 0);
+            $base = $product?->productPriceForQuantity($quantity, $clientId ?: null);
+            $this->jobItems[$index]['unit_price'] = $base === null ? '' : number_format($base, 2, '.', '');
+            $this->resetValidation("jobItems.$index.unit_price");
+        }
+    }
+
     public function updatedJobItems(mixed $value, string $key): void
     {
         if (!$this->showCreate) return;
@@ -149,7 +172,7 @@ trait ManagesCreateOrderProducts
         $productCategory = $productCategory !== '' ? $productCategory : 'Uncategorized';
 
         $defaultQuantity = 1000;
-        $basePrice = $product->productPriceForQuantity($defaultQuantity);
+        $basePrice = $product->productPriceForQuantity($defaultQuantity, $this->clientId);
 
         $this->jobItems[] = [
             'product_id' => (int) $product->id,
@@ -164,7 +187,7 @@ trait ManagesCreateOrderProducts
 
     /**
      * Keep the Create Order base/unit price synchronized with the Product
-     * Master's quantity price table. Order creation never treats this value as
+     * Master's customer quantity price table. Order creation never treats this value as
      * a manual override: changing quantity immediately resolves the matching
      * price breakpoint for the selected Product.
      */
@@ -187,7 +210,7 @@ trait ManagesCreateOrderProducts
             ->active()
             ->find($productId);
 
-        $basePrice = $product?->productPriceForQuantity($quantity);
+        $basePrice = $product?->productPriceForQuantity($quantity, $this->clientId);
         $this->jobItems[$index]['unit_price'] = $basePrice !== null
             ? number_format($basePrice, 2, '.', '')
             : '';

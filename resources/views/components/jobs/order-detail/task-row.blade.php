@@ -79,7 +79,8 @@
         $displayStatus = 'Ready';
         $statusClass = 'active';
     }
-    $assigneeName = $task->assignee?->name ?: 'Unassigned';
+    $supplierAssigned = $task->relationLoaded('supplierAssignment') && $task->supplierAssignment !== null;
+    $assigneeName = $supplierAssigned ? 'Supplier' : ($task->assignee?->name ?: 'Unassigned');
     $assigneeInitials = collect(preg_split('/\s+/', trim($assigneeName)))->filter()->map(fn($part) => mb_strtoupper(mb_substr($part, 0, 1)))->take(2)->implode('');
     $isCancelled = strcasecmp((string) $job->status, 'Cancelled') === 0;
     $showProductionMonitorInline = $isProductionMonitorTask
@@ -170,7 +171,7 @@
     </div>
 
     <div class="ft-order-task-assignee-inline ft-inline-edit-shell"
-        x-data="window.FlowTrack.ui.inlineEdit({ key:@js('task-'.$task->id.'-assignee'), label:'task assignee', value:@js($task->assignee_id ?? ''), display:@js($assigneeName), avatarUrl:@js($task->assignee?->profileImageUrl() ?? '') })"
+        x-data="window.FlowTrack.ui.inlineEdit({ key:@js('task-'.$task->id.'-assignee'), label:'task assignee', value:@js($supplierAssigned ? 'supplier' : ($task->assignee_id ?? '')), display:@js($assigneeName), avatarUrl:@js($task->assignee?->profileImageUrl() ?? '') })"
         :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
         x-on:click.outside="if(editing) cancelEdit()"
         x-on:ft-inline-remote-cancel.stop="cancelEdit()"
@@ -201,10 +202,11 @@
         </div>
         @if($canAssignTask && !$isCancelled)
             <div x-cloak x-show="editing" class="ft-order-assignee-picker">
-                <x-ui.inline-remote-user :value="$task->assignee_id ?? ''" :selected-label="$assigneeName" parent-type="job" :parent-id="$job->id" variant="compact" :menu-width="300" external-trigger />
+                <x-ui.inline-remote-user :value="$supplierAssigned ? 'supplier' : ($task->assignee_id ?? '')" :selected-label="$assigneeName" parent-type="job" :parent-id="$job->id" variant="compact" :menu-width="300" :allow-supplier="\App\Services\SupplierBridge\SupplierWorkflowProjection::actionKey($automationKey, (int) ($task->phase?->sequence ?? 0)) !== null" external-trigger />
             </div>
             <x-ui.inline-save-state compact />
         @endif
+
     </div>
 
     <div class="date ft-order-task-due ft-inline-edit-shell"

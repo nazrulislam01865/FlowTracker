@@ -2,6 +2,7 @@
             <x-catalog.product-view
                 :product="$viewProduct"
                 :suppliers="$viewProductSuppliers"
+                :supplier-pricing-tables="$viewProductSupplierPricingTables"
                 :can-edit="$canEditMaster"
                 :can-delete="$canDeleteMaster"
                 :display-timezone="$displayTimezone"
@@ -30,6 +31,9 @@
                 :selected-product-category-id="$parentId"
                 :selected-subcategory="$productSubcategory"
                 :price-preview="$productPricePreview"
+                :customer-price-preview="$productCustomerPricePreview"
+                :client-price-rows="$productClientPrices"
+                :supplier-price-rows="$productSupplierPrices"
                 :remote-surcharge-preview="$productRemoteSurchargePreview"
                 :product-options="$productOptions"
                 :product-option-uploads="$productOptionUploads"

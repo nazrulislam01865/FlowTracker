@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers\SupplierBridge;
 
-use App\Models\Document;
 use App\Models\FlowJob;
 use App\Models\MasterRecord;
 use App\Support\OrderStageResolver;
+use App\Services\SupplierBridge\ApprovedOrderArtwork;
 use App\Services\SecureDocumentStorage;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
@@ -32,7 +32,18 @@ final class DownloadOrderArtwork extends Controller
         $stage = OrderStageResolver::resolve(
             $job->phase?->name, $job->phase?->short_name, $job->phase?->sequence, $job->status,
         );
-        abort_unless((int) $stage['sequence'] >= 3, 404);
+        $artwork = app(ApprovedOrderArtwork::class);
+        $tasks = DB::table('tasks as t')
+            ->join('task_pack_items as pack', 'pack.id', '=', 't.task_pack_task_id')
+            ->where('t.flow_job_id', $order)->whereNull('t.deleted_at')
+            ->whereIn('pack.automation_key', [
+                'ART_PREPARE_UPLOAD', 'ART_INTERNAL_REVIEW', 'ART_SEND_ORDER_TEAM',
+                'ART_CLIENT_ERP_DECISION', 'ART_SAMPLE_APPROVAL',
+            ])->orderByDesc('t.id')->get([
+                't.id', 'pack.automation_key', 't.status', 't.completed_at',
+            ]);
+        abort_unless($artwork->confirmed((int) $stage['sequence'], $tasks,
+            $job->completed_at !== null), 404);
         $eligible = DB::table('flow_job_items as i')
             ->join('master_records as p', 'p.id', '=', 'i.catalog_product_id')
             ->join('master_records as s', 's.id', '=', 'i.supplier_id')
@@ -54,9 +65,9 @@ final class DownloadOrderArtwork extends Controller
         });
         abort_unless($assigned, 404);
 
-        $file = Document::query()->whereKey($document)->where('flow_job_id', $order)
-            ->where('category', 'Artwork')->where('is_final', true)
-            ->where('size', '>', 0)->where('size', '<=', 20971520)->firstOrFail();
+        $file = $artwork->documents($order, $tasks)
+            ->first(static fn ($candidate) => (int) $candidate->id === $document);
+        abort_unless($file, 404);
         $located = $storage->locate((string) $file->path);
         abort_unless($located, 404);
         $disk = Storage::disk($located['disk']);
@@ -65,7 +76,8 @@ final class DownloadOrderArtwork extends Controller
             if (! is_resource($handle)) return;
             try { fpassthru($handle); } finally { fclose($handle); }
         }, basename((string) $file->name) ?: 'approved-artwork', [
-            'Content-Type' => 'application/octet-stream', 'Cache-Control' => 'private, no-store',
+            'Content-Type' => 'application/octet-stream', 'Content-Length' => (string) $file->size,
+            'Cache-Control' => 'private, no-store',
             'X-Content-Type-Options' => 'nosniff',
         ]);
     }

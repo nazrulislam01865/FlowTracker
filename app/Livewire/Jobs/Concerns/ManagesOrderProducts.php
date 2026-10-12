@@ -69,7 +69,7 @@ trait ManagesOrderProducts
         $quantity = max(1, (int) ($item->quantity ?? 1));
         $defaultSupplier = $product ? $catalog->supplierForProduct($product) : null;
         $selectedSupplier = $item->supplier ?: $defaultSupplier;
-        $basePrice = $product?->productPriceForQuantity($quantity);
+        $basePrice = $product?->productPriceForQuantity($quantity, (int) $job->client_id);
 
         $this->editOrderProductItemId = (int) $item->id;
         $this->editOrderProductSelectedId = $product ? (int) $product->id : null;
@@ -172,7 +172,7 @@ trait ManagesOrderProducts
         $product = $catalog->findActiveProductOrFail($productId);
         $supplier = $catalog->supplierForProduct($product);
         $quantity = max(1, (int) $this->editOrderProductQuantity);
-        $basePrice = $product->productPriceForQuantity($quantity);
+        $basePrice = $product->productPriceForQuantity($quantity, (int) $job->client_id);
 
         $this->editOrderProductSelectedId = (int) $product->id;
         $this->editOrderProductSearch = (string) $product->name;
@@ -209,7 +209,7 @@ trait ManagesOrderProducts
 
         $product = app(\App\Services\ProductCatalogService::class)
             ->findActiveProductOrFail((int) $this->editOrderProductSelectedId);
-        $basePrice = $product->productPriceForQuantity($quantity);
+        $basePrice = $product->productPriceForQuantity($quantity, (int) app(VisibleOrderQuery::class)->base(auth()->user(), $this->selectedJobId)->client_id);
         $this->editOrderProductUnitPrice = $basePrice !== null
             ? number_format((float) $basePrice, 2, '.', '')
             : '0.00';
@@ -273,7 +273,7 @@ trait ManagesOrderProducts
             return;
         }
 
-        $basePrice = $product->productPriceForQuantity((int) $data['editOrderProductQuantity']);
+        $basePrice = $product->productPriceForQuantity((int) $data['editOrderProductQuantity'], (int) $job->client_id);
         $resolvedUnitPrice = $basePrice !== null
             ? (float) $basePrice
             : (float) $data['editOrderProductUnitPrice'];
@@ -425,7 +425,7 @@ trait ManagesOrderProducts
         $linkedSupplier = app(\App\Services\ProductCatalogService::class)->supplierForProduct($product);
 
         $defaultQuantity = 1000;
-        $basePrice = $product->productPriceForQuantity($defaultQuantity);
+        $basePrice = $product->productPriceForQuantity($defaultQuantity, (int) $job->client_id);
 
         $this->jobProductSelectedId = (int) $product->id;
         $this->jobProductCategory = $category !== '' ? $category : 'Uncategorized';
@@ -504,7 +504,7 @@ trait ManagesOrderProducts
             ->active()
             ->find((int) $this->jobProductSelectedId);
 
-        $basePrice = $product?->productPriceForQuantity($quantity);
+        $basePrice = $product?->productPriceForQuantity($quantity, (int) app(VisibleOrderQuery::class)->base(auth()->user(), $this->selectedJobId)->client_id);
         $this->jobProductUnitPrice = $basePrice !== null
             ? number_format((float) $basePrice, 2, '.', '')
             : '0.00';
@@ -565,7 +565,7 @@ trait ManagesOrderProducts
         $supplierId = filled($data['jobProductSupplierId'] ?? null)
             ? (int) $data['jobProductSupplierId']
             : null;
-        $basePrice = $product->productPriceForQuantity((int) $data['jobProductQuantity']);
+        $basePrice = $product->productPriceForQuantity((int) $data['jobProductQuantity'], (int) $job->client_id);
         $resolvedUnitPrice = $basePrice !== null
             ? (float) $basePrice
             : (float) $data['jobProductUnitPrice'];

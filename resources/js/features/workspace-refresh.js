@@ -16,7 +16,7 @@ const state = {
 };
 
 const workspaceChannelName = () => metaContent('flowtrack-reverb-workspace-channel') || null;
-const dispatchRefresh = () => window.Livewire?.dispatch?.(LIVEWIRE_EVENTS.WORKSPACE_REFRESH);
+const dispatchRefresh = (reason = null) => window.Livewire?.dispatch?.(LIVEWIRE_EVENTS.WORKSPACE_REFRESH, { reason });
 
 export const syncWorkspaceState = async ({ dispatchOnVersionChange = true } = {}) => {
     if (!metaContent('flowtrack-notification-count-url') || document.hidden) return;
@@ -105,7 +105,7 @@ export const subscribeWorkspace = (realtime = null) => {
     state.channel.bind(REALTIME_EVENTS.WORKSPACE_REFRESH, (payload = {}) => {
         const incomingVersion = payload?.version == null ? null : String(payload.version);
         if (incomingVersion) state.version = incomingVersion;
-        dispatchRefresh();
+        dispatchRefresh(payload?.reason == null ? null : String(payload.reason));
         syncWorkspaceState({ dispatchOnVersionChange: false });
     });
     bindConnectionLifecycle(realtime);

@@ -20,6 +20,129 @@ use Illuminate\Validation\ValidationException;
 
 trait ManagesMasterEditor
 {
+    /** Keep one editable price card per tagged supplier, without overwriting cards being edited. */
+    public function syncProductSupplierPriceRows(?MasterRecord $product = null): void
+    {
+        if ($this->group !== 'product' || ! $this->showModal) return;
+
+        $ids = collect($this->productSupplierIds)
+            ->push($this->productSupplierId)
+            ->map(fn ($id) => (int) $id)->filter()->unique()->take(100)->values();
+        $existing = collect($this->productSupplierPrices)->keyBy('supplier_id');
+        $missing = $ids->reject(fn ($id) => $existing->has($id));
+        $labels = $missing->isEmpty() ? collect() : MasterRecord::query()
+            ->forWorkspace(app(MasterDataService::class)->workspaceId())->ofType('supplier')
+            ->whereIn('id', $missing->all())->get(['id', 'name', 'code', 'metadata'])->keyBy('id');
+        $overrides = $this->editId && $missing->isNotEmpty()
+            ? DB::table('supplier_product_prices')->where('workspace_id', app(MasterDataService::class)->workspaceId())
+                ->where('product_id', $this->editId)->whereIn('supplier_id', $missing->all())
+                ->pluck('price_breakpoints', 'supplier_id')
+            : collect();
+        $pricing = app(\App\Services\SupplierBridge\SupplierPricing::class);
+        // The optimistic-lock version must use the exact same fallback as
+        // SupplierPricing::rows(), which is what the approval API compares.
+        // A draft preview can differ from saved metadata, causing false conflicts.
+        $fallback = $this->productPricePreview;
+        if ($this->editId && $missing->isNotEmpty()) {
+            $savedProduct = $product ?? MasterRecord::query()
+                ->forWorkspace(app(MasterDataService::class)->workspaceId())
+                ->ofType('product')->findOrFail($this->editId);
+            $fallback = $savedProduct->supplierPriceBreakpoints();
+        }
+        $updated = [];
+        foreach ($ids as $id) {
+            if ($existing->has($id)) {
+                $updated[] = $existing->get($id);
+                continue;
+            }
+            $supplier = $labels->get($id);
+            if (! $supplier) continue;
+            $raw = $overrides->get($id);
+            $rows = $pricing->normalize($raw !== null
+                ? (json_decode((string) $raw, true) ?: [])
+                : $fallback);
+            $table = $rows === [] ? '' : "Quantity\t".collect($rows)->pluck('quantity')->implode("\t")
+                ."\nProduct price\t".collect($rows)->pluck('price')->implode("\t");
+            $updated[] = [
+                'key' => 'supplier-'.$id,
+                'supplier_id' => (string) $id,
+                'supplier_name' => $supplier->name,
+                'table' => $table,
+                'original_table' => $table,
+                'original_version' => $pricing->version($rows),
+                'preview' => $rows,
+            ];
+        }
+        $this->productSupplierPrices = $updated;
+    }
+
+    /** Refresh only supplier price snapshots after a real concurrent change.
+     * Preserve other unsaved product fields and client price edits.
+     */
+    public function refreshProductSupplierPrices(): void
+    {
+        if ($this->group !== 'product' || ! $this->showModal || ! $this->editId) return;
+
+        $product = MasterRecord::query()
+            ->forWorkspace(app(MasterDataService::class)->workspaceId())
+            ->ofType('product')->findOrFail($this->editId);
+        $this->productSupplierPrices = [];
+        $this->syncProductSupplierPriceRows($product);
+        $this->resetValidation('productSupplierPrices');
+        foreach (array_keys($this->productSupplierPrices) as $index) {
+            $this->resetValidation('productSupplierPrices.'.$index.'.table');
+        }
+    }
+
+    public function updatedProductSupplierIds(): void { $this->syncProductSupplierPriceRows(); }
+    public function updatedProductSupplierId(): void { $this->syncProductSupplierPriceRows(); }
+
+    public function updatedProductSupplierPrices(mixed $value, string $key): void
+    {
+        if ($this->group !== 'product' || ! preg_match('/^(\d+)\.table$/', $key, $match)) return;
+        $index = (int) $match[1];
+        if (! isset($this->productSupplierPrices[$index])) return;
+        $this->resetValidation('productSupplierPrices.'.$index.'.table');
+        $this->productSupplierPrices[$index]['preview'] = app(ProductPriceTableParser::class)
+            ->parseTable((string) $this->productSupplierPrices[$index]['table'])['price_breakpoints'];
+    }
+
+    /** Tagging clients adds their price editors, preserving existing saved prices and unsaved text. */
+    public function syncProductClientPriceRowsForSelectedClients(): void
+    {
+        if ($this->group !== 'product' || ! $this->showModal || $this->productClientAvailabilityMode !== 'specific') return;
+
+        // Keep historical price records for untagged clients untouched; only
+        // tagged clients are rendered below. A change in product availability
+        // must not silently delete a previously saved client price table.
+        $existing = collect($this->productClientPrices)
+            ->pluck('client_id')->map(fn ($id) => (int) $id)->all();
+        foreach (collect($this->productClientIds)->map(fn ($id) => (int) $id)
+            ->filter()->unique()->take(100) as $id) {
+            if (! in_array($id, $existing, true)) {
+                $this->productClientPrices[] = [
+                    'key' => 'client-'.$id, 'client_id' => (string) $id,
+                    'table' => '', 'preview' => [],
+                ];
+                $existing[] = $id;
+            }
+        }
+    }
+
+    public function updatedProductClientIds(): void { $this->syncProductClientPriceRowsForSelectedClients(); }
+
+    public function updatedProductClientPrices(mixed $value, string $key): void
+    {
+        if ($this->group !== 'product' || !preg_match('/^(\d+)\.(table|client_id)$/', $key, $match)) return;
+        $index = (int) $match[1];
+        if (!isset($this->productClientPrices[$index])) return;
+        $this->resetValidation('productClientPrices.'.$index);
+        if ($match[2] === 'table') {
+            $this->productClientPrices[$index]['preview'] = app(ProductPriceTableParser::class)
+                ->parseTable((string) $this->productClientPrices[$index]['table'])['price_breakpoints'];
+        }
+    }
+
     public function open(?int $id = null): void
     {
         $action = $id ? 'edit' : 'create';
@@ -49,6 +172,7 @@ trait ManagesMasterEditor
         $this->newProductCategoryName = '';
         $this->productSupplierId = null;
         $this->productSupplierIds = [];
+        $this->productSupplierPrices = [];
         $this->productCertificateUpload = null;
         $this->productTemplateUpload = null;
         $this->productOptions = [];
@@ -97,6 +221,26 @@ trait ManagesMasterEditor
             $this->productFormMainCategory = $r->productMainCategory();
             $this->productSize = $r->productSize();
             $this->productPriceTable = trim((string) data_get($r->metadata, 'price_table_raw'));
+            $this->productCustomerPriceTable = trim((string) data_get($r->metadata, 'customer_price_table_raw'));
+            $this->productCustomerPricePreview = $r->customerPriceBreakpoints();
+            $this->productClientPrices = $this->group === 'product'
+                ? $r->clientPrices()->orderBy('client_id')->get(['client_id', 'price_table_raw', 'price_breakpoints'])
+                    ->map(fn ($row) => [
+                        'key' => 'client-'.$row->client_id,
+                        'client_id' => (string) $row->client_id,
+                        'table' => trim((string) $row->price_table_raw) !== ''
+                            ? (string) $row->price_table_raw
+                            : ((array) $row->price_breakpoints === [] ? ''
+                                : "Quantity\t".collect($row->price_breakpoints)->pluck('quantity')->implode("\t")
+                                    ."\nProduct price\t".collect($row->price_breakpoints)->pluck('price')->implode("\t")),
+                        'preview' => (array) $row->price_breakpoints,
+                    ])->all()
+                : [];
+            if ($this->productCustomerPriceTable === '' && $this->productCustomerPricePreview !== []) {
+                $quantities = collect($this->productCustomerPricePreview)->pluck('quantity')->implode("\t");
+                $prices = collect($this->productCustomerPricePreview)->pluck('price')->implode("\t");
+                $this->productCustomerPriceTable = "Quantity\t".$quantities."\nProduct price\t".$prices;
+            }
             $storedPriceBreakpoints = collect((array) data_get($r->metadata, 'price_breakpoints', []))
                 ->map(fn ($row) => [
                     'quantity' => (int) data_get($row, 'quantity', 0),
@@ -168,6 +312,8 @@ Remote Area charge	".$remoteRow;
                         ->all();
             }
             $this->productClientIds = $storedClientIds;
+            $this->syncProductClientPriceRowsForSelectedClients();
+            $this->syncProductSupplierPriceRows($r);
             $this->productTestCertificateNumber = trim((string) data_get($r->metadata, 'test_certificate_number'));
             $this->color = MasterColor::normalize($r->color) ?: MasterColor::defaultFor($this->group, $r->name);
             $this->parentId = in_array($this->group, ['product', 'state'], true) ? $r->parent_id : null;
@@ -224,9 +370,13 @@ Remote Area charge	".$remoteRow;
             $this->productReferenceCode = '';
             $this->productSupplierId = null;
             $this->productSupplierIds = [];
+            $this->productSupplierPrices = [];
             $this->productFormMainCategory = '';
             $this->productSize = '';
             $this->productPriceTable = '';
+            $this->productCustomerPriceTable = '';
+            $this->productCustomerPricePreview = [];
+            $this->productClientPrices = [];
             $this->productPricePreview = [];
             $this->productRemoteSurchargePreview = [];
             $this->productOptions = [];
@@ -357,6 +507,18 @@ Remote Area charge	".$remoteRow;
             'productFormMainCategory' => $this->group === 'product' ? ['required', 'string', 'max:255'] : ['nullable'],
             'productSize' => $this->group === 'product' ? ['nullable', 'string', 'max:1200'] : ['nullable'],
             'productPriceTable' => $this->group === 'product' ? ['nullable', 'string', 'max:50000'] : ['nullable'],
+            'productCustomerPriceTable' => $this->group === 'product' ? ['nullable', 'string', 'max:50000'] : ['nullable'],
+            'productClientPrices' => $this->group === 'product' ? ['array', 'max:100'] : ['array'],
+            'productClientPrices.*.client_id' => $this->group === 'product' ? ['required', 'integer', 'distinct', Rule::exists('clients', 'id')->where(fn ($q) => $q->where('is_active', true)->whereNull('purged_at'))] : ['nullable'],
+            'productClientPrices.*.table' => $this->group === 'product' ? ['nullable', 'string', 'max:50000'] : ['nullable'],
+            'productSupplierPrices' => $this->group === 'product' ? ['array', 'max:100'] : ['array'],
+            'productSupplierPrices.*.supplier_id' => $this->group === 'product' ? ['required', 'integer', 'distinct'] : ['nullable'],
+            'productSupplierPrices.*.table' => $this->group === 'product' ? ['nullable', 'string', 'max:50000'] : ['nullable'],
+            // Keep the server-loaded baseline in the validated payload. Without
+            // these rules, validate() strips both fields, treats every populated
+            // supplier table as changed and falsely rejects all edits as stale.
+            'productSupplierPrices.*.original_table' => $this->group === 'product' ? ['nullable', 'string', 'max:50000'] : ['nullable'],
+            'productSupplierPrices.*.original_version' => $this->group === 'product' ? ['required', 'regex:/\A[a-f0-9]{64}\z/'] : ['nullable'],
             'productOptions' => $this->group === 'product' ? ['array', 'max:30'] : ['array'],
             'productOptions.*.key' => $this->group === 'product' ? ['required', 'string', 'max:80'] : ['nullable'],
             'productOptions.*.label' => $this->group === 'product' ? ['required', 'string', 'max:120'] : ['nullable'],
@@ -478,6 +640,7 @@ Remote Area charge	".$remoteRow;
 
         $productPriceBreakpoints = [];
         $productRemoteSurchargeBreakpoints = [];
+        $productCustomerPriceBreakpoints = [];
         if ($this->group === 'product' && trim((string) $data['productPriceTable']) !== '') {
             $parsedPriceTable = app(ProductPriceTableParser::class)->parseTable($data['productPriceTable']);
             $productPriceBreakpoints = $parsedPriceTable['price_breakpoints'];
@@ -486,6 +649,64 @@ Remote Area charge	".$remoteRow;
                 throw ValidationException::withMessages([
                     'productPriceTable' => 'Paste a valid price table containing quantity and product price values.',
                 ]);
+            }
+        }
+
+        if ($this->group === 'product' && trim((string) $data['productCustomerPriceTable']) !== '') {
+            $productCustomerPriceBreakpoints = app(ProductPriceTableParser::class)
+                ->parseTable($data['productCustomerPriceTable'])['price_breakpoints'];
+            if ($productCustomerPriceBreakpoints === []) {
+                throw ValidationException::withMessages([
+                    'productCustomerPriceTable' => 'Paste a valid customer price table containing quantity and price values.',
+                ]);
+            }
+        }
+
+        $validatedClientPriceTables = [];
+        if ($this->group === 'product') {
+            foreach ($data['productClientPrices'] as $index => $row) {
+                $table = trim((string) ($row['table'] ?? ''));
+                if ($table === '') continue; // Show empty slots without inventing price data.
+                $breakpoints = app(ProductPriceTableParser::class)->parseTable($table)['price_breakpoints'];
+                if ($breakpoints === []) {
+                    throw ValidationException::withMessages([
+                        "productClientPrices.$index.table" => 'Paste a valid quantity and selling-price table.',
+                    ]);
+                }
+                $validatedClientPriceTables[] = [
+                    'client_id' => (int) $row['client_id'],
+                    'price_table_raw' => $table,
+                    'price_breakpoints' => json_encode($breakpoints, JSON_THROW_ON_ERROR),
+                ];
+            }
+        }
+
+        // Only edited supplier tables are written. Unmodified approved prices remain authoritative.
+        $supplierPriceEdits = [];
+        if ($this->group === 'product') {
+            $taggedSupplierIds = collect($data['productSupplierIds'] ?? [])
+                ->push($data['productSupplierId'] ?? null)
+                ->map(fn ($id) => (int) $id)->filter()->unique()->all();
+            $pricing = app(\App\Services\SupplierBridge\SupplierPricing::class);
+            foreach ($data['productSupplierPrices'] as $index => $row) {
+                $supplierId = (int) $row['supplier_id'];
+                if (! in_array($supplierId, $taggedSupplierIds, true)) {
+                    throw ValidationException::withMessages(["productSupplierPrices.$index.supplier_id" => 'Select a tagged supplier.']);
+                }
+                $original = app(ProductPriceTableParser::class)
+                    ->parseTable((string) ($row['original_table'] ?? ''))['price_breakpoints'];
+                $table = trim((string) ($row['table'] ?? ''));
+                if ($table === '') continue; // Empty slots do not erase approved prices.
+                $parsed = app(ProductPriceTableParser::class)->parseTable($table)['price_breakpoints'];
+                if ($parsed === []) {
+                    throw ValidationException::withMessages(["productSupplierPrices.$index.table" => 'Paste a valid quantity and supplier cost table.']);
+                }
+                $parsed = $pricing->normalize($parsed);
+                if ($parsed === $pricing->normalize($original)) continue;
+                $supplierPriceEdits[] = [
+                    'supplier_id' => $supplierId, 'rows' => $parsed,
+                    'base_version' => (string) ($row['original_version'] ?? ''),
+                ];
             }
         }
 
@@ -598,6 +819,12 @@ Remote Area charge	".$remoteRow;
             } else {
                 unset($metadata['price_table_raw'], $metadata['price_breakpoints'], $metadata['remote_surcharge_breakpoints']);
             }
+            if ($productCustomerPriceBreakpoints !== []) {
+                $metadata['customer_price_table_raw'] = trim((string) $data['productCustomerPriceTable']);
+                $metadata['customer_price_breakpoints'] = $productCustomerPriceBreakpoints;
+            } else {
+                unset($metadata['customer_price_table_raw'], $metadata['customer_price_breakpoints']);
+            }
             $metadata['sub_category'] = trim((string) $data['productSubcategory']) ?: null;
             unset($metadata['taxonomy_unassigned']);
             $metadata['test_certificate_number'] = trim((string) $data['productTestCertificateNumber']) ?: null;
@@ -655,8 +882,48 @@ Remote Area charge	".$remoteRow;
             }
         }
 
+        $previousSupplierIds = [];
+        if ($this->group === 'product' && $this->editId && config('supplier_bridge.enabled')) {
+            $previousSupplierIds = DB::table('product_supplier_links')
+                ->where('product_id', $this->editId)->where('workspace_id', $workspaceId)
+                ->pluck('supplier_id')->map(fn ($id) => (int) $id)->all();
+            $previousSupplierIds = array_merge($previousSupplierIds, $existing->productSupplierIds());
+        }
         $wasCreating = !$this->editId;
-        $saveRecord = function () use ($data, $metadata, $workspaceId) {
+        $saveRecord = function () use ($data, $metadata, $workspaceId, $validatedClientPriceTables, $supplierPriceEdits) {
+            $supplierEditsToApply = $supplierPriceEdits;
+            if ($this->group === 'product' && $this->editId && $supplierPriceEdits !== []) {
+                // Lock and compare the SAVED record before writing product metadata.
+                // Comparing afterwards can generate a false "prices changed" error
+                // when a legacy fallback table is also normalized during save.
+                // Lock order matches the review API (product first).
+                $savedProduct = MasterRecord::query()->forWorkspace($workspaceId)->ofType('product')
+                    ->whereKey($this->editId)->lockForUpdate()->firstOrFail();
+                $pricing = app(\App\Services\SupplierBridge\SupplierPricing::class);
+                $currentTables = DB::table('supplier_product_prices')
+                    ->where('workspace_id', $workspaceId)
+                    ->where('product_id', $savedProduct->id)
+                    ->whereIn('supplier_id', array_column($supplierPriceEdits, 'supplier_id'))
+                    ->pluck('price_breakpoints', 'supplier_id');
+                $fallback = $savedProduct->supplierPriceBreakpoints();
+                foreach ($supplierPriceEdits as $index => $edit) {
+                    $raw = $currentTables->get($edit['supplier_id']);
+                    $rows = $pricing->normalize($raw !== null
+                        ? (json_decode((string) $raw, true) ?: []) : $fallback);
+                    if (! hash_equals($pricing->version($rows), $edit['base_version'])) {
+                        // The same price tiers may already have been approved or
+                        // saved in another request. That is an idempotent no-op,
+                        // not a conflicting change; do not write them again.
+                        if ($rows === $edit['rows']) {
+                            unset($supplierEditsToApply[$index]);
+                            continue;
+                        }
+                        throw ValidationException::withMessages(['productSupplierPrices' =>
+                            'Supplier prices changed since this product was opened. Reload the supplier prices to review the latest approved costs before saving.']);
+                    }
+                }
+            }
+
             $record = app(\App\Actions\MasterData\SaveMasterRecordAction::class)->execute($this->group, [
                 'code' => $data['code'],
                 'name' => $data['name'],
@@ -683,9 +950,52 @@ Remote Area charge	".$remoteRow;
                     'updated_at' => $now,
                 ], $supplierIds));
             }
+            if ($this->group === 'product' && $supplierEditsToApply !== []) {
+                foreach ($supplierEditsToApply as $edit) {
+                    $id = $edit['supplier_id'];
+                    DB::table('supplier_product_prices')->upsert([[
+                        'workspace_id' => $workspaceId,
+                        'product_id' => (int) $record->id,
+                        'supplier_id' => $id,
+                        'price_breakpoints' => json_encode($edit['rows'], JSON_THROW_ON_ERROR),
+                        'created_at' => now(), 'updated_at' => now(),
+                    ]], ['supplier_id', 'product_id'], ['price_breakpoints', 'updated_at']);
+                    DB::table('supplier_price_proposals')->where('workspace_id', $workspaceId)
+                        ->where('product_id', $record->id)->where('supplier_id', $id)
+                        ->where('status', 'pending')->update([
+                            'status' => 'stale', 'review_note' => 'FlowTracker changed these supplier prices directly.',
+                            'reviewed_by' => auth()->id(), 'reviewed_at' => now(), 'updated_at' => now(),
+                        ]);
+                }
+            }
+            if ($this->group === 'product') {
+                $clientIds = array_column($validatedClientPriceTables, 'client_id');
+                $query = DB::table('product_client_prices')->where('workspace_id', $workspaceId)->where('product_id', $record->id);
+                $clientIds === [] ? $query->delete() : $query->whereNotIn('client_id', $clientIds)->delete();
+                if ($validatedClientPriceTables !== []) {
+                    $now = now();
+                    DB::table('product_client_prices')->upsert(
+                        array_map(fn (array $row): array => array_merge($row, [
+                            'workspace_id' => $workspaceId,
+                            'product_id' => (int) $record->id,
+                            'created_at' => $now,
+                            'updated_at' => $now,
+                        ]), $validatedClientPriceTables),
+                        ['product_id', 'client_id'],
+                        ['price_table_raw', 'price_breakpoints', 'updated_at']
+                    );
+                }
+            }
             return $record;
         };
         $record = $this->group === 'product' ? DB::transaction($saveRecord) : $saveRecord();
+
+        if ($this->group === 'product' && config('supplier_bridge.enabled')) {
+            app(\App\Services\SupplierBridge\MarkCatalogDirty::class)->supplierIds(
+                $workspaceId, array_merge($previousSupplierIds, (array) ($metadata['supplier_ids'] ?? [])),
+            );
+        }
+
 
         if ($this->group === 'product') {
             try {

@@ -52,6 +52,7 @@ class Form extends Component
                 'description' => (string) $item->description,
                 'color' => MasterColor::normalize((string) ($item->color ?? '')) ?: '#2563EB',
                 'default_assignee_id' => $item->default_assignee_id,
+                'default_assignee_type' => (string) ($item->default_assignee_type ?: 'user'),
                 'default_assignee_label' => (string) ($item->defaultAssignee?->name ?: 'Unassigned'),
                 'default_department_id' => $item->default_department_id,
                 'default_department_label' => (string) ($item->defaultDepartment?->name ?: 'No department default'),
@@ -119,6 +120,7 @@ class Form extends Component
         $index = (int) $matches[1];
         abort_unless(array_key_exists($index, $this->tasks), 422);
 
+        abort_unless(($this->tasks[$index]['default_assignee_type'] ?? 'user') === 'user', 422);
         $raw = trim((string) ($value ?? ''));
         if ($raw === '') {
             $this->tasks[$index]['default_assignee_id'] = null;
@@ -244,6 +246,7 @@ class Form extends Component
             'tasks.*.description' => ['nullable','string','max:5000'],
             'tasks.*.color' => ['required','regex:/^#[0-9A-Fa-f]{6}$/'],
             'tasks.*.default_assignee_id' => ['nullable','integer'],
+            'tasks.*.default_assignee_type' => ['required','in:user,supplier'],
             'tasks.*.default_department_id' => ['nullable','integer'],
             'tasks.*.priority_id' => ['nullable','integer'],
             'tasks.*.document_category_id' => ['nullable','integer'],
@@ -345,6 +348,7 @@ class Form extends Component
         $errors = [];
 
         $assigneeIds = collect($tasks)
+            ->filter(fn ($task) => ($task['default_assignee_type'] ?? 'user') === 'user')
             ->pluck('default_assignee_id')
             ->filter(fn ($id) => filled($id))
             ->map(fn ($id) => (int) $id)
@@ -362,7 +366,9 @@ class Form extends Component
         ];
         $allMasterIds = collect($masterIdFields)
             ->flatMap(function (string $type, string $field) use ($tasks) {
-                return collect($tasks)->pluck($field)->filter(fn ($id) => filled($id))->map(fn ($id) => (int) $id);
+                return collect($tasks)
+                    ->filter(fn ($task) => $field !== 'default_department_id' || ($task['default_assignee_type'] ?? 'user') === 'user')
+                    ->pluck($field)->filter(fn ($id) => filled($id))->map(fn ($id) => (int) $id);
             })
             ->unique()
             ->values();
@@ -401,12 +407,13 @@ class Form extends Component
 
         foreach ($tasks as $index => $task) {
             $assigneeId = filled($task['default_assignee_id'] ?? null) ? (int) $task['default_assignee_id'] : null;
-            if ($assigneeId && ! $validAssigneeLookup->has($assigneeId)) {
+            if (($task['default_assignee_type'] ?? 'user') === 'user' && $assigneeId && ! $validAssigneeLookup->has($assigneeId)) {
                 $errors["tasks.$index.default_assignee_id"] = 'The selected assignee is invalid.';
             }
 
             foreach ($masterIdFields as $field => $type) {
                 $id = filled($task[$field] ?? null) ? (int) $task[$field] : null;
+                if ($field === 'default_department_id' && ($task['default_assignee_type'] ?? 'user') === 'supplier') continue;
                 if ($id && ! $validMasterLookup->has($type.'|'.$id)) {
                     $errors["tasks.$index.$field"] = 'The selected option is invalid.';
                 }
@@ -439,6 +446,7 @@ class Form extends Component
             'description' => '',
             'color' => $this->defaultTaskColor(count($this->tasks)),
             'default_assignee_id' => null,
+            'default_assignee_type' => 'user',
             'default_assignee_label' => 'Unassigned',
             'default_department_id' => null,
             'default_department_label' => 'No department default',

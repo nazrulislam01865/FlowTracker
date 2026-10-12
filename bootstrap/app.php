@@ -38,6 +38,13 @@ return Application::configure(basePath: dirname(__DIR__))
                 ->middleware('throttle:30,1');
             Route::post('/api/supplier-bridge/rfq-quotations', \App\Http\Controllers\SupplierBridge\ReceiveSupplierQuotation::class)
                 ->middleware('throttle:30,1');
+            Route::post('/api/supplier-bridge/workflow-task-actions', \App\Http\Controllers\SupplierBridge\ReceiveSupplierTaskAction::class)
+                ->middleware('throttle:20,1');
+            Route::post('/api/supplier-bridge/realtime-auth', \App\Http\Controllers\SupplierBridge\AuthorizeSupplierRealtime::class)
+                ->middleware('throttle:60,1');
+
+            Route::post('/api/supplier-bridge/price-proposals', \App\Http\Controllers\SupplierBridge\ReceiveSupplierPriceProposal::class)
+                ->middleware('throttle:30,1');
 
             Route::post('/telemetry/realtime', RealtimeTelemetryController::class)
                 ->middleware(['web', 'auth', 'throttle:60,1'])

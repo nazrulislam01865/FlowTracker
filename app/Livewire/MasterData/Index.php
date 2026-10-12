@@ -66,6 +66,12 @@ class Index extends Component
     public string $productFormMainCategory = '';
     public string $productSize = '';
     public string $productPriceTable = '';
+    public string $productCustomerPriceTable = '';
+    public array $productCustomerPricePreview = [];
+    /** @var array<int,array{client_id:string,table:string,preview:array}> */
+    public array $productClientPrices = [];
+    /** Edited supplier costs, keyed by the supplier selected above (no shared editable cost table). */
+    public array $productSupplierPrices = [];
     public array $productPricePreview = [];
     public array $productRemoteSurchargePreview = [];
     public array $productOptions = [];

@@ -689,6 +689,7 @@ trait ManagesOrderCreation
                 // Re-resolve the preferred client-available Order workflow after
                 // a Client change so Create Order never retains a stale id.
                 $this->applyClientWorkflowDefault($id);
+                $this->refreshCreateOrderClientPrices();
                 $this->resetCreateShippingAddress();
                 $this->initializeCreateShippingContact($id);
                 $this->initializeCreateShipments();
@@ -1352,13 +1353,14 @@ trait ManagesOrderCreation
 
         $catalogInvalid = false;
         $workspaceId = app(MasterDataService::class)->workspaceId();
+        $clientId = (int) $data['clientId'];
+        $products = MasterRecord::query()
+            ->forWorkspace($workspaceId)->ofType('product')->active()
+            ->with(['parent:id,name,status', 'clientPrices' => fn ($query) => $query->where('client_id', $clientId)])
+            ->whereIn('id', collect($data['jobItems'])->pluck('product_id')->map(fn ($id) => (int) $id)->unique()->all())
+            ->get()->keyBy('id');
         foreach ($data['jobItems'] as $index => $row) {
-            $product = MasterRecord::query()
-                ->forWorkspace($workspaceId)
-                ->ofType('product')
-                ->active()
-                ->with('parent:id,name,status')
-                ->find((int) $row['product_id']);
+            $product = $products->get((int) $row['product_id']);
 
             $valid = $product
                 && $product->parent
@@ -1372,11 +1374,11 @@ trait ManagesOrderCreation
                 continue;
             }
 
-            // Product Master pricing is authoritative for Create Order. Resolve
+            // Product Master customer pricing is authoritative for Create Order. Resolve
             // the base/unit price again at save time so a stale browser value or
             // client-side tampering cannot override the quantity price table.
             $quantity = (int) ($row['quantity'] ?? 0);
-            $basePrice = $product->productPriceForQuantity($quantity);
+            $basePrice = $product->productPriceForQuantity($quantity, (int) $data['clientId']);
             $data['jobItems'][$index]['unit_price'] = $basePrice !== null
                 ? round($basePrice, 2)
                 : null;

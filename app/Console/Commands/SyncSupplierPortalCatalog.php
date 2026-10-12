@@ -32,7 +32,10 @@ final class SyncSupplierPortalCatalog extends Command
                     }
                 } catch (\Throwable $exception) {
                     $failed++;
-                    $this->warn('Supplier '.$record->id.' could not be synchronized.');
+                    report($exception);
+                    $reason = $exception instanceof \RuntimeException
+                        ? $exception->getMessage() : 'Check the Laravel log for details.';
+                    $this->warn('Supplier '.$record->id.' could not be synchronized: '.$reason);
                 }
             }
         });

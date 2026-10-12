@@ -40,7 +40,8 @@ class ProductCatalogDetailAndExcelExportTest extends TestCase
         $this->assertStringContainsString('.xlsx', $actions);
         $this->assertStringContainsString('ProductSupplierLookup::class', $writer);
         $this->assertStringContainsString('chunkById(200', $writer);
-        $this->assertStringContainsString('Price by quantity', $writer);
+        $this->assertStringContainsString('Supplier price by quantity', $writer);
+        $this->assertStringContainsString('Customer price by quantity', $writer);
         $this->assertStringContainsString('Shipping urgencies', $writer);
         $this->assertStringContainsString('Certificate URL', $writer);
         $this->assertStringContainsString('DataType::TYPE_STRING', $writer);

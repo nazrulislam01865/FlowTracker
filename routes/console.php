@@ -272,8 +272,6 @@ Artisan::command('flowtrack:sync-supplier-orders', function (): int {
     return 0;
 })->purpose('Retry supplier order-created API notifications without exposing FlowTracker');
 
-Schedule::command('flowtrack:sync-supplier-orders')->everyMinute()->withoutOverlapping()->onOneServer();
-
 // Refresh only delivered orders whose workflow, assigned lines, or artwork changed.
 Artisan::command('flowtrack:refresh-supplier-orders {--all : Queue every previously delivered order once} {--order= : Only this FlowTracker order ID} {--dry-run : Count without modifying records}', function (): int {
     if (! config('supplier_bridge.enabled')) { $this->error('Supplier bridge disabled.'); return 1; }
@@ -292,7 +290,11 @@ Artisan::command('flowtrack:refresh-supplier-orders {--all : Queue every previou
                 ->orWhereExists(fn ($sub) => $sub->selectRaw('1')->from('documents as doc')
                     ->whereColumn('doc.flow_job_id', 'd.flow_job_id')->whereColumn('doc.updated_at', '>=', 'd.delivered_at'))
                 ->orWhereExists(fn ($sub) => $sub->selectRaw('1')->from('flow_job_items as i')
-                    ->whereColumn('i.flow_job_id', 'd.flow_job_id')->whereColumn('i.updated_at', '>=', 'd.delivered_at'));
+                    ->whereColumn('i.flow_job_id', 'd.flow_job_id')->whereColumn('i.updated_at', '>=', 'd.delivered_at'))
+                // Assigning or clearing a supplier task does not necessarily
+                // modify tasks.updated_at. Include assignment-only changes.
+                ->orWhereExists(fn ($sub) => $sub->selectRaw('1')->from('supplier_task_assignments as a')
+                    ->whereColumn('a.flow_job_id', 'd.flow_job_id')->whereColumn('a.updated_at', '>=', 'd.delivered_at'));
         });
     }
     $count = 0;
@@ -311,15 +313,15 @@ Artisan::command('flowtrack:refresh-supplier-orders {--all : Queue every previou
                     'locked_at' => null, 'updated_at' => now(),
                 ]);
         }
-    } while ($this->option('all'));
+    } while (true);
     $this->info($count.($this->option('dry-run') ? ' matching deliveries (dry run).' : ' supplier order refreshes queued.'));
     return 0;
 })->purpose('Queue changed supplier order details and approved artwork for retry-safe delivery');
 
-Schedule::command('flowtrack:refresh-supplier-orders')->everyFiveMinutes()->withoutOverlapping()->onOneServer();
-
-// Safety-net for product assignment updates made outside the supplier editor.
-Schedule::command('flowtrack:sync-supplier-catalog')->hourly()->withoutOverlapping()->onOneServer();
+// Reconcile before sending on the same minute. Stage and assignment updates
+// also enqueue immediately via the existing model observers.
+Schedule::command('flowtrack:refresh-supplier-orders')->everyMinute()->withoutOverlapping()->onOneServer();
+Schedule::command('flowtrack:sync-supplier-orders')->everyMinute()->withoutOverlapping()->onOneServer();
 
 // Retry both existing and newly sent supplier RFQs without blocking inquiry email delivery.
 Artisan::command('flowtrack:sync-supplier-rfqs', function (): int {
@@ -343,3 +345,9 @@ Artisan::command('flowtrack:sync-supplier-rfqs', function (): int {
 })->purpose('Retry supplier RFQ invitations to the isolated Supplier Portal');
 
 Schedule::command('flowtrack:sync-supplier-rfqs')->everyMinute()->withoutOverlapping()->onOneServer();
+
+// Coalesced, supplier-scoped changes. No periodic expensive full-catalogue scans.
+\Illuminate\Support\Facades\Schedule::command('flowtrack:sync-pending-supplier-catalog')->everyMinute()->withoutOverlapping();
+
+// Low-frequency safety reconciliation also catches changes performed by external imports.
+\Illuminate\Support\Facades\Schedule::command('flowtrack:sync-supplier-catalog')->dailyAt('02:30')->withoutOverlapping();

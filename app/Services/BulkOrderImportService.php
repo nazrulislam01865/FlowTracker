@@ -85,6 +85,16 @@ class BulkOrderImportService
         $referenceCounts = $rows->pluck('ref')->map(fn ($value) => trim((string) $value))->filter()->countBy();
         $clientMaps = $this->clientMaps($actor);
         $productMaps = $this->productMaps();
+        // All import rows use the existing Product catalogue. Eager-load only
+        // relevant client price records once, rather than once per CSV line.
+        $pricedProducts = $rows->map(fn (array $row) => $this->lookupProduct((string) ($row['product_id'] ?? ''), $productMaps))
+            ->filter()->unique('id')->values();
+        $pricedClientIds = $rows->map(fn (array $row) => $this->lookupClient((string) ($row['client_id'] ?? ''), $clientMaps)?->id)
+            ->filter()->unique()->values()->all();
+        if ($pricedProducts->isNotEmpty()) {
+            (new \Illuminate\Database\Eloquent\Collection($pricedProducts->all()))
+                ->load(['clientPrices' => fn ($query) => $query->whereIn('client_id', $pricedClientIds)]);
+        }
         $phoneCountryCodes = $this->activePhoneCountryCodes();
         $productionUrgencyMap = $this->urgencyMap('production_urgency');
         $shipmentUrgencyMap = $this->urgencyMap('shipment_urgency');
@@ -200,7 +210,7 @@ class BulkOrderImportService
                     $row['product_supplier_resolved_name'] = (string) $supplier->name;
                 }
 
-                $basePrice = $product->productPriceForQuantity((int) $row['product_quantity_resolved']);
+                $basePrice = $product->productPriceForQuantity((int) $row['product_quantity_resolved'], (int) $row['client_resolved_id']);
                 $row['product_unit_price_resolved'] = $basePrice !== null
                     ? round((float) $basePrice, 2)
                     : null;

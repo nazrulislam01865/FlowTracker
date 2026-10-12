@@ -1,4 +1,4 @@
-@props(['product', 'suppliers' => collect(), 'canEdit' => false, 'canDelete' => false, 'displayTimezone' => 'UTC', 'detailSectionsReady' => []])
+@props(['product', 'suppliers' => collect(), 'supplierPricingTables' => collect(), 'canEdit' => false, 'canDelete' => false, 'displayTimezone' => 'UTC', 'detailSectionsReady' => []])
 @php
     $pricingReady = (bool) ($detailSectionsReady['pricing'] ?? false);
     $optionsReady = (bool) ($detailSectionsReady['options'] ?? false);
@@ -9,7 +9,7 @@
 
     // These helpers can parse legacy metadata and build large arrays. Keep that
     // CPU/HTML work behind viewport boundaries instead of doing it above fold.
-    $priceBreakpoints = $pricingReady ? collect($product->productPriceBreakpoints()) : collect();
+    $clientPriceTables = $pricingReady ? $product->clientPrices : collect();
     $remoteSurchargeBreakpoints = $pricingReady ? collect($product->productRemoteSurchargeBreakpoints())->keyBy('quantity') : collect();
     $productOptions = $optionsReady ? collect($product->productOptions()) : collect();
     $shipmentUrgencyOptions = $optionsReady ? collect($product->productShipmentUrgencyOptions()) : collect();
@@ -83,39 +83,44 @@
     </x-catalog.product-section>
 
     @if($pricingReady)
-    @if($priceBreakpoints->isNotEmpty())
-        <x-catalog.product-section title="Product pricing">
-            <div class="ft-product-price-preview-wrap ft-product-detail-price-wrap">
-                <table class="ft-product-price-preview">
-                    <thead>
-                        <tr>
-                            <th>Quantity</th>
-                            @foreach($priceBreakpoints as $priceRow)
-                                <th>{{ number_format((int) $priceRow['quantity']) }}</th>
-                            @endforeach
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <th>Product price</th>
-                            @foreach($priceBreakpoints as $priceRow)
-                                <td>{{ (float) $priceRow['price'] === 0.0 ? '0' : rtrim(rtrim(number_format((float) $priceRow['price'], 6, '.', ''), '0'), '.') }}</td>
-                            @endforeach
-                        </tr>
-                        @if($remoteSurchargeBreakpoints->isNotEmpty())
-                            <tr>
-                                <th>Remote surcharge</th>
-                                @foreach($priceBreakpoints as $priceRow)
-                                    @php
-                                        $remotePrice = data_get($remoteSurchargeBreakpoints->get($priceRow['quantity']), 'price');
-                                    @endphp
-                                    <td>{{ $remotePrice === null ? '—' : ((float) $remotePrice === 0.0 ? '0' : rtrim(rtrim(number_format((float) $remotePrice, 6, '.', ''), '0'), '.')) }}</td>
+    @if($supplierPricingTables->isNotEmpty())
+        <x-catalog.product-section title="Supplier-based pricing">
+            @foreach($supplierPricingTables as $supplierTable)
+                <div class="ft-product-price-preview-wrap ft-product-detail-price-wrap" style="margin-bottom:14px">
+                    <strong>{{ $supplierTable['name'] }}</strong>
+                    @if(count($supplierTable['rows']))
+                        <table class="ft-product-price-preview">
+                            <thead><tr><th>Quantity</th>
+                                @foreach($supplierTable['rows'] as $priceRow)
+                                    <th>{{ number_format((int) $priceRow['quantity']) }}</th>
                                 @endforeach
-                            </tr>
-                        @endif
-                    </tbody>
-                </table>
-            </div>
+                            </tr></thead><tbody><tr><th>Supplier price</th>
+                                @foreach($supplierTable['rows'] as $priceRow)
+                                    <td>{{ (float) $priceRow['price'] === 0.0 ? '0' : rtrim(rtrim(number_format((float) $priceRow['price'], 6, '.', ''), '0'), '.') }}</td>
+                                @endforeach
+                            </tr></tbody>
+                        </table>
+                    @else
+                        <small>No supplier prices entered.</small>
+                    @endif
+                </div>
+            @endforeach
+        </x-catalog.product-section>
+    @endif
+    @if($clientPriceTables->isNotEmpty())
+        <x-catalog.product-section title="Client-specific pricing">
+            @foreach($clientPriceTables as $clientPrice)
+                <div class="ft-product-price-preview-wrap ft-product-detail-price-wrap" style="margin-bottom:14px">
+                    <strong>{{ $clientPrice->client?->name ?? ('Client #'.$clientPrice->client_id) }}{{ $clientPrice->client?->code ? ' · '.$clientPrice->client->code : '' }}</strong>
+                    <table class="ft-product-price-preview">
+                        <thead><tr><th>Quantity</th>
+                            @foreach((array) $clientPrice->price_breakpoints as $breakpoint)<th>{{ number_format((int) $breakpoint['quantity']) }}</th>@endforeach
+                        </tr></thead><tbody><tr><th>Client price</th>
+                            @foreach((array) $clientPrice->price_breakpoints as $breakpoint)<td>{{ (float) $breakpoint['price'] === 0.0 ? '0' : rtrim(rtrim(number_format((float) $breakpoint['price'], 6, '.', ''), '0'), '.') }}</td>@endforeach
+                        </tr></tbody>
+                    </table>
+                </div>
+            @endforeach
         </x-catalog.product-section>
     @endif
     @else

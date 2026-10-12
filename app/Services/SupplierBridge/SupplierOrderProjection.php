@@ -49,22 +49,32 @@ final class SupplierOrderProjection
             ->whereColumn('p.workspace_id', 's.workspace_id')
             ->orderBy('i.id')
             ->get(['i.id', 'i.catalog_product_id', 'p.name as product_name', 'p.metadata',
-                'i.quantity', 'i.unit_price', 'i.notes', 'l.id as linked_id']);
+                'i.quantity', 'i.notes', 'l.id as linked_id']);
 
+        // Batch-select assigned supplier prices; never fall back to customer selling prices.
+        $overrides = DB::table('supplier_product_prices')->where('supplier_id', $supplierId)
+            ->whereIn('product_id', $items->pluck('catalog_product_id'))
+            ->pluck('price_breakpoints', 'product_id');
         $lines = [];
         foreach ($items->unique('id') as $item) {
-            if (! $item->linked_id) {
-                $product = new MasterRecord();
-                $product->setRawAttributes(['type' => 'product', 'metadata' => $item->metadata]);
-                if (! $product->hasProductSupplier($supplierId)) continue;
+            $product = new MasterRecord();
+            $product->setRawAttributes(['type' => 'product', 'metadata' => $item->metadata]);
+            if (! $item->linked_id && ! $product->hasProductSupplier($supplierId)) continue;
+
+            $raw = $overrides->get((int) $item->catalog_product_id);
+            $rows = $raw !== null ? app(SupplierPricing::class)->normalize(json_decode((string) $raw, true) ?: [])
+                : $product->supplierPriceBreakpoints();
+            $supplierPrice = null;
+            foreach ($rows as $row) {
+                if ($row['quantity'] > (int) $item->quantity) break;
+                $supplierPrice = (float) $row['price'];
             }
-            $unitPrice = is_numeric($item->unit_price) && (float) $item->unit_price > 0
-                ? round((float) $item->unit_price, 2) : null;
+            $unitPrice = $supplierPrice !== null ? round($supplierPrice, 2) : null;
             $lines[] = [
                 'product_name' => mb_substr((string) ($item->product_name ?: 'Product'), 0, 255),
                 'product_code' => 'PRD-'.str_pad((string) $item->catalog_product_id, 6, '0', STR_PAD_LEFT),
                 'quantity' => (int) $item->quantity,
-                // The selected order line's own price, never another supplier's table.
+                // Supplier unit cost only. Never reveal the customer's order selling price.
                 'unit_price' => $unitPrice,
                 'notes' => mb_substr((string) ($item->notes ?? ''), 0, 2000),
             ];
@@ -90,17 +100,8 @@ final class SupplierOrderProjection
                 't.completed_at', 't.created_at', 't.updated_at']);
         $byKey = $taskRows->unique('automation_key')->keyBy('automation_key');
 
-        // Never treat a skipped Client ERP task as approval while Sample Approval is pending.
-        $clientApproval = $byKey->get('ART_CLIENT_ERP_DECISION');
-        $sampleApproval = $byKey->get('ART_SAMPLE_APPROVAL');
-        $clientApproved = $clientApproval && ($clientApproval->completed_at !== null
-            || strcasecmp((string) $clientApproval->status, 'Completed') === 0);
-        $sampleStatus = strtolower(trim((string) ($sampleApproval?->status ?? '')));
-        $sampleSatisfied = ! $sampleApproval || $sampleApproval->completed_at !== null
-            || in_array($sampleStatus, ['completed', 'skipped', 'not applicable', 'n/a'], true);
-        $sampleApproved = $sampleApproval && ($sampleApproval->completed_at !== null || $sampleStatus === 'completed');
-        $artworkConfirmed = $sequence > 2 || $order->completed_at !== null
-            || ($clientApproved && $sampleSatisfied) || $sampleApproved;
+        $approved = app(ApprovedOrderArtwork::class);
+        $artworkConfirmed = $approved->confirmed($sequence, $taskRows, $order->completed_at !== null);
         $stages = [];
         foreach ([2 => 'Artwork', 3 => 'Production', 4 => 'Quality control'] as $index => $name) {
             $state = ($sequence > $index || $order->completed_at !== null) ? 'completed'
@@ -130,11 +131,9 @@ final class SupplierOrderProjection
             ];
         }
 
-        // Only original approved artwork stored privately, never invoices or client files.
-        $documents = $artworkConfirmed ? DB::table('documents')
-            ->where('flow_job_id', $orderId)->where('category', 'Artwork')->where('is_final', true)
-            ->where('size', '>', 0)->where('size', '<=', 20971520)
-            ->orderByDesc('id')->limit(20)->get(['id', 'name', 'size', 'version', 'created_at'])
+        // The current artwork upload batch is approved by workflow tasks, not
+        // by documents.is_final. Do not include cancelled or superseded files.
+        $documents = $artworkConfirmed ? $approved->documents($orderId, $taskRows)
             ->map(static fn ($file): array => [
                 'id' => (int) $file->id,
                 'name' => mb_substr(basename(str_replace('\\', '/', (string) $file->name)), 0, 255),
@@ -196,7 +195,8 @@ final class SupplierOrderProjection
             'currency' => preg_match('/^[A-Z]{3}$/', strtoupper((string) $order->currency))
                 ? strtoupper((string) $order->currency) : 'USD',
             'supplier_instruction' => mb_substr((string) ($order->supplier_instruction ?? ''), 0, 2000),
-            'items' => $lines, 'stages' => $stages, 'documents' => $documents,
+            'items' => $lines, 'stages' => $stages,
+            'workflow' => app(SupplierWorkflowProjection::class)->build($order, $supplierId), 'documents' => $documents,
             'recent_updates' => $recent,
         ]];
     }

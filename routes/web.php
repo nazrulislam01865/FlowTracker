@@ -121,6 +121,14 @@ Route::get('/session/status', function () {
     return response()->json(['ok' => true, 'user_id' => auth()->id()]);
 })->middleware('auth')->name('session.status');
 
+Route::middleware(['auth', 'super.admin'])->prefix('administration/supplier-prices')->name('supplier-prices.')->group(function () {
+    Route::get('/', [\App\Http\Controllers\SupplierBridge\SupplierPriceReviewController::class, 'index'])->name('index');
+    Route::post('/update/{supplier}/{product}', [\App\Http\Controllers\SupplierBridge\SupplierPriceReviewController::class, 'updatePrice'])
+        ->whereNumber('supplier')->whereNumber('product')->middleware('throttle:30,1')->name('update');
+    Route::post('/{proposal}/review', [\App\Http\Controllers\SupplierBridge\SupplierPriceReviewController::class, 'review'])
+        ->whereNumber('proposal')->middleware('throttle:30,1')->name('review');
+});
+
 Route::middleware(['auth', 'super.admin'])->prefix('administration/reminders/supplier-artwork')->name('supplier-reminder.')->group(function () {
     Route::get('/', [SupplierArtworkReminderController::class, 'index'])->name('index');
     Route::post('/create', [SupplierArtworkReminderController::class, 'create'])->name('create');

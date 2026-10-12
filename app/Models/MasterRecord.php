@@ -34,6 +34,7 @@ class MasterRecord extends Model
 
     public function parent(): BelongsTo { return $this->belongsTo(self::class, 'parent_id'); }
     public function creator(): BelongsTo { return $this->belongsTo(User::class, 'created_by'); }
+    public function clientPrices(): HasMany { return $this->hasMany(ProductClientPrice::class, 'product_id'); }
     public function children(): HasMany { return $this->hasMany(self::class, 'parent_id')->orderBy('sort_order')->orderBy('name'); }
 
     public function scopeForWorkspace(Builder $query, int $workspaceId): Builder
@@ -347,12 +348,71 @@ class MasterRecord extends Model
         }
     }
 
-    public function productPriceForQuantity(int|float $quantity): ?float
+    /** Existing price tables are supplier costs, never customer selling prices. */
+    public function supplierPriceBreakpoints(): array
+    {
+        return $this->productPriceBreakpoints();
+    }
+
+    /** @return array<int, array{quantity:int, price:float}> */
+    public function customerPriceBreakpoints(): array
+    {
+        if ($this->type !== 'product') return [];
+
+        $rows = $this->normalizedProductPriceRows(data_get($this->metadata, 'customer_price_breakpoints', []));
+        if ($rows !== []) return $rows;
+
+        $raw = trim((string) data_get($this->metadata, 'customer_price_table_raw'));
+        if ($raw === '') return [];
+
+        try {
+            return app(\App\Services\ProductPriceTableParser::class)->parseTable($raw)['price_breakpoints'] ?? [];
+        } catch (\Throwable $exception) {
+            report($exception);
+            return [];
+        }
+    }
+
+    /**
+     * Resolve client-specific selling prices first, then the existing shared
+     * customer price table. Supplier costs are NEVER a selling-price fallback.
+     * A client table with no matching quantity breakpoint is not replaced with
+     * another client's price or a supplier cost.
+     */
+    public function productPriceForQuantity(int|float $quantity, ?int $clientId = null): ?float
+    {
+        if ($this->type !== 'product' || $quantity <= 0) return null;
+
+        if ($clientId !== null && $clientId > 0) {
+            $rows = $this->relationLoaded('clientPrices')
+                ? $this->clientPrices->firstWhere('client_id', $clientId)?->price_breakpoints
+                : $this->clientPrices()->where('client_id', $clientId)->value('price_breakpoints');
+
+            if ($rows !== null) {
+                if (is_string($rows)) $rows = json_decode($rows, true);
+                // Do not silently substitute the shared table when a client
+                // override is present but the requested quantity is below its
+                // first breakpoint.
+                return $this->priceForQuantity($quantity, $this->normalizedProductPriceRows($rows));
+            }
+        }
+
+        return $this->priceForQuantity($quantity, $this->customerPriceBreakpoints());
+    }
+
+    /** Supplier costs are used only in supplier-facing projections. */
+    public function supplierPriceForQuantity(int|float $quantity): ?float
+    {
+        return $this->priceForQuantity($quantity, $this->supplierPriceBreakpoints());
+    }
+
+    /** @param array<int, array{quantity:int, price:float}> $breakpoints */
+    private function priceForQuantity(int|float $quantity, array $breakpoints): ?float
     {
         if ($this->type !== 'product' || $quantity <= 0) return null;
 
         $matchedPrice = null;
-        foreach ($this->productPriceBreakpoints() as $breakpoint) {
+        foreach ($breakpoints as $breakpoint) {
             if ($breakpoint['quantity'] > $quantity) break;
             $matchedPrice = (float) $breakpoint['price'];
         }
@@ -567,9 +627,9 @@ class MasterRecord extends Model
     }
 
     /** @param array<int,string> $optionKeys */
-    public function productPriceForQuantityWithOptions(int|float $quantity, array $optionKeys = []): ?float
+    public function productPriceForQuantityWithOptions(int|float $quantity, array $optionKeys = [], ?int $clientId = null): ?float
     {
-        $basePrice = $this->productPriceForQuantity($quantity);
+        $basePrice = $this->productPriceForQuantity($quantity, $clientId);
         if ($basePrice === null) return null;
 
         return $basePrice + $this->productOptionsExtraCharge($optionKeys);

@@ -227,6 +227,15 @@ trait ManagesProductAssetsAndOptions
         $this->resetValidation('productShipmentUrgencies');
     }
 
+    public function updatedProductCustomerPriceTable(): void
+    {
+        if ($this->group !== 'product') return;
+
+        $this->resetValidation('productCustomerPriceTable');
+        $this->productCustomerPricePreview = app(ProductPriceTableParser::class)
+            ->parseTable($this->productCustomerPriceTable)['price_breakpoints'];
+    }
+
     public function updatedProductPriceTable(): void
     {
         if ($this->group !== 'product') {

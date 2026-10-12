@@ -196,6 +196,8 @@ trait BuildsMasterDataPageData
                 ->forWorkspace($workspaceId)
                 ->ofType('product')
                 ->with(['parent', 'creator'])
+                ->when($this->productDetailSectionsReady['pricing'] ?? false,
+                    fn ($query) => $query->with(['clientPrices.client:id,name,code']))
                 ->find($this->viewProductId);
             if (! $viewProduct) {
                 $this->showProductView = false;
@@ -608,6 +610,26 @@ trait BuildsMasterDataPageData
             ? $supplierLookup->forProducts(collect([$viewProduct]), $workspaceId)->get((int) $viewProduct->id, collect())
             : collect();
 
+        // Supplier-approved overrides are authoritative in the Product Details view.
+        // Read them in one query, not one query per tagged supplier.
+        $viewProductSupplierPricingTables = collect();
+        if ($viewProduct && ($this->productDetailSectionsReady['pricing'] ?? false) && $viewProductSuppliers->isNotEmpty()) {
+            $overrides = DB::table('supplier_product_prices')
+                ->where('workspace_id', $workspaceId)->where('product_id', $viewProduct->id)
+                ->whereIn('supplier_id', $viewProductSuppliers->pluck('id'))
+                ->pluck('price_breakpoints', 'supplier_id');
+            $pricing = app(\App\Services\SupplierBridge\SupplierPricing::class);
+            $viewProductSupplierPricingTables = $viewProductSuppliers->map(function ($supplier) use ($overrides, $pricing, $viewProduct): array {
+                $override = $overrides->get($supplier->id);
+                return [
+                    'name' => $supplier->name,
+                    'rows' => $pricing->normalize($override !== null
+                        ? (json_decode((string) $override, true) ?: [])
+                        : $viewProduct->supplierPriceBreakpoints()),
+                ];
+            });
+        }
+
         $bulkProductSupplierOptions = collect();
         $bulkProductSupplierProductCounts = collect();
         if ($this->group === 'product' && $this->bulkProductPanel === 'supplier') {
@@ -765,12 +787,16 @@ trait BuildsMasterDataPageData
             'productMainCategories' => $productMainCategories,
             'productMainCategoryFilterOptions' => $productMainCategoryFilterOptions,
             'productSubcategories' => $productSubcategories,
-            'productClients' => $this->group === 'product' && $this->showModal && $this->productClientAvailabilityMode === 'specific' && auth()->user()
-                ? app(ProductClientOptions::class)->forEditor(auth()->user(), $this->productClientIds)
+            'productClients' => $this->group === 'product' && $this->showModal && ($this->productClientAvailabilityMode === 'specific' || $this->productClientPrices !== []) && auth()->user()
+                ? app(ProductClientOptions::class)->forEditor(auth()->user(), array_values(array_unique(array_merge(
+                    $this->productClientIds,
+                    array_map('intval', array_column($this->productClientPrices, 'client_id'))
+                ))))
                 : collect(),
             'availableProductShipmentUrgencies' => $availableProductShipmentUrgencies,
             'viewProduct' => $viewProduct,
             'viewProductSuppliers' => $viewProductSuppliers,
+            'viewProductSupplierPricingTables' => $viewProductSupplierPricingTables,
             'editProduct' => $editProduct,
             'productSelectionCount' => $productSelectionCount,
             'productSuppliersByProduct' => $productSuppliersByProduct,

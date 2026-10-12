@@ -181,6 +181,7 @@ final class OrderWorkflowSection extends Component
         }
     }
 
+
     public function selectOverviewPhase(int $phaseId): void
     {
         $user = auth()->user();
@@ -201,9 +202,14 @@ final class OrderWorkflowSection extends Component
     public function editTask(int $id): void { $this->redirectRoute('jobs.index', ['task' => $id], navigate: true); }
 
     #[On('flowtrack-notification')]
-    public function refreshRealtime(): void
+    #[On('flowtrack-refresh')]
+    public function refreshRealtime(?string $reason = null): void
     {
-        // Rerender workflow only.
+        // Supplier actions ultimately update a Task, FlowJob or Document.
+        // Ignore unrelated workspace settings and administration changes.
+        if ($reason !== null && ! preg_match('/^(Task|FlowJob|Document|FlowJobItem|FlowJobPhaseHistory):/', $reason)) {
+            $this->skipRender();
+        }
     }
 
     #[On('order-shipping-selection-updated')]
@@ -254,6 +260,8 @@ final class OrderWorkflowSection extends Component
         $couriers = $master->active('courier');
 
         $context = app(OrderDetailViewService::class)->build($job, $user, $shipmentUrgencies, $couriers);
+        // Supplier assignment is now inherited from Task Pack Setup; no row-level selector/query.
+        $job->tasks->loadMissing('supplierAssignment');
         $context['shipmentMethods'] = $shipmentMethods;
         $context['shipmentUrgencies'] = $shipmentUrgencies;
         $context['shipmentCouriers'] = $couriers;

@@ -118,6 +118,15 @@ trait ManagesProductSupplierAssignments
                 });
         });
 
+        app(\App\Services\SupplierBridge\MarkCatalogDirty::class)->supplierIds($workspaceId, $supplierIds->all());
+        if ($supplierIds->count() === 1 && config('supplier_bridge.enabled')) {
+            try {
+                app(\App\Services\SupplierBridge\SendCatalogImmediately::class)->send((int) $supplierIds->first());
+            } catch (\Throwable $exception) {
+                report($exception); // Existing outbox retries; do not roll back valid tags.
+                session()->flash('warning', 'Products were linked. Supplier portal synchronization is pending and will retry.');
+            }
+        }
         app(\App\Services\WorkspaceRefreshService::class)->touch('MasterRecord:bulk-product-supplier');
         $this->bulkProductPanel = null;
         $this->clearProductSelection();

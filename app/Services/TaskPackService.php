@@ -113,7 +113,7 @@ class TaskPackService
             ->select(['id', 'workspace_id', 'code', 'name', 'description', 'is_active'])
             ->with([
                 'items' => fn ($query) => $query->select([
-                    'id', 'task_pack_id', 'title', 'color', 'default_assignee_id',
+                    'id', 'task_pack_id', 'title', 'color', 'default_assignee_id', 'default_assignee_type',
                     'default_department_id', 'priority_id', 'document_category_id',
                     'document_required_before_completion', 'allow_multiple_documents', 'document_instructions',
                     'is_required', 'sort_order',
@@ -212,7 +212,8 @@ class TaskPackService
                     'title' => $row['title'] ?? '',
                     'description' => $row['description'] ?? null,
                     'color' => $row['color'] ?? '#2563EB',
-                    'default_assignee_id' => $row['default_assignee_id'] ?? null,
+                    'default_assignee_id' => ($row['default_assignee_type'] ?? 'user') === 'supplier' ? null : ($row['default_assignee_id'] ?? null),
+                    'default_assignee_type' => $row['default_assignee_type'] ?? 'user',
                     'default_department_id' => $row['default_department_id'] ?? null,
                     'priority_id' => $row['priority_id'] ?? null,
                     'document_category_id' => $row['document_category_id'] ?? null,
@@ -443,6 +444,8 @@ class TaskPackService
         abort_if((bool) $pack->is_snapshot, 404);
         $item = DB::transaction(function () use ($pack, $data, $id) {
             $existingItem = $id ? TaskPackItem::query()->findOrFail($id) : null;
+            $previousType = (string) ($existingItem?->default_assignee_type ?: 'user');
+            $nextType = ($data['default_assignee_type'] ?? $previousType) === 'supplier' ? 'supplier' : 'user';
             $previousDefaultAssigneeId = $existingItem?->default_assignee_id ? (int) $existingItem->default_assignee_id : null;
             $previousDefaultDepartmentId = $existingItem?->default_department_id ? (int) $existingItem->default_department_id : null;
 
@@ -453,8 +456,9 @@ class TaskPackService
                 'task_pack_id' => $pack->id,
                 'title' => trim($data['title']),
                 'description' => blank($data['description'] ?? null) ? null : trim($data['description']),
-                'default_assignee_id' => $data['default_assignee_id'] ?? null,
-                'default_department_id' => $data['default_department_id'] ?? null,
+                'default_assignee_type' => $nextType,
+                'default_assignee_id' => $nextType === 'supplier' ? null : ($data['default_assignee_id'] ?? null),
+                'default_department_id' => $nextType === 'supplier' ? null : ($data['default_department_id'] ?? null),
                 'priority_id' => $data['priority_id'] ?? null,
                 'document_category_id' => $data['document_category_id'] ?? null,
                 'due_offset_days' => max(0, (int) ($data['due_offset_days'] ?? 1)),
@@ -523,10 +527,13 @@ class TaskPackService
             $nextDefaultAssigneeId = $item->default_assignee_id ? (int) $item->default_assignee_id : null;
             $nextDefaultDepartmentId = $item->default_department_id ? (int) $item->default_department_id : null;
             $assignmentChanged = $previousDefaultAssigneeId !== $nextDefaultAssigneeId
-                || $previousDefaultDepartmentId !== $nextDefaultDepartmentId;
+                || $previousDefaultDepartmentId !== $nextDefaultDepartmentId
+                || $previousType !== $nextType;
 
             if ($assignmentChanged) {
                 $this->syncGeneratedTaskAssignees($item->fresh(), $previousDefaultAssigneeId);
+                // A change in the Task Pack default updates only matching generated tasks.
+                app(\App\Services\SupplierBridge\SupplierDefaultTaskAssigner::class)->syncForTaskPackItem($item);
             }
 
             return $item;

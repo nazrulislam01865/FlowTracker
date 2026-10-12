@@ -30,6 +30,29 @@ trait ManagesInquiryCreateProducts
      * price table. The price is derived from the selected Product and quantity;
      * it is not a manual per-Inquiry override on this screen.
      */
+    /** Refresh all visible product prices when the selected client changes. */
+    private function refreshCreateInquiryClientPrices(): void
+    {
+        if (!$this->showCreate || $this->createProductRows === []) return;
+        $clientId = (int) ($this->clientId ?: 0);
+        $productIds = collect($this->createProductRows)->pluck('product_id')->map(fn ($id) => (int) $id)
+            ->filter()->unique()->values();
+        if ($productIds->isEmpty()) return;
+        $products = MasterRecord::query()
+            ->forWorkspace(app(MasterDataService::class)->workspaceId())
+            ->ofType('product')->active()
+            ->whereIn('id', $productIds)
+            ->with(['clientPrices' => fn ($query) => $query->where('client_id', $clientId)])
+            ->get(['id', 'type', 'metadata'])->keyBy('id');
+        foreach ($this->createProductRows as $index => $row) {
+            $product = $products->get((int) ($row['product_id'] ?? 0));
+            $quantity = (int) ($row['quantity'] ?? 0);
+            $base = $product?->productPriceForQuantity($quantity, $clientId ?: null);
+            $this->createProductRows[$index]['unit_price'] = $base === null ? '' : number_format($base, 2, '.', '');
+            $this->resetValidation("createProductRows.$index.unit_price");
+        }
+    }
+
     public function updatedCreateProductRows(mixed $value, string $key): void
     {
         if (!$this->showCreate || !str_ends_with($key, '.quantity')) return;
@@ -142,7 +165,7 @@ trait ManagesInquiryCreateProducts
         $productCategory = $productCategory !== '' ? $productCategory : 'Uncategorized';
 
         $defaultQuantity = 1000;
-        $basePrice = $product->productPriceForQuantity($defaultQuantity);
+        $basePrice = $product->productPriceForQuantity($defaultQuantity, $this->clientId);
         $this->createProductRows[] = [
             'row_key' => (string) \Illuminate\Support\Str::uuid(),
             'product_id' => (int) $product->id,
@@ -179,7 +202,7 @@ trait ManagesInquiryCreateProducts
             ->active()
             ->find($productId);
 
-        $basePrice = $product?->productPriceForQuantity($quantity);
+        $basePrice = $product?->productPriceForQuantity($quantity, $this->clientId);
         $this->createProductRows[$index]['unit_price'] = $basePrice !== null
             ? number_format($basePrice, 2, '.', '')
             : '';

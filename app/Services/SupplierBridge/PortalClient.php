@@ -17,7 +17,7 @@ final class PortalClient
         $scheme = parse_url($url, PHP_URL_SCHEME);
         $host = parse_url($url, PHP_URL_HOST);
         if (! config('supplier_bridge.enabled') || strlen($secret) < 32 ||
-            ! in_array($path, ['suppliers', 'supplier-access', 'rfqs'], true) ||
+            ! in_array($path, ['suppliers', 'supplier-access', 'supplier-access/reset', 'rfqs'], true) ||
             ! is_string($host) || $host === '' || str_contains($url, '@') ||
             str_contains($url, '?') || str_contains($url, '#') ||
             ! ($scheme === 'https' || ($scheme === 'http' && app()->environment(['local', 'testing']) && in_array($host, ['localhost', '127.0.0.1'], true)))) {
@@ -33,7 +33,7 @@ final class PortalClient
             'X-FlowTrack-Event' => $event,
             'X-FlowTrack-Signature' => hash_hmac('sha256', $time."\n".$event."\n".$body, $secret),
             'Accept' => 'application/json',
-        ])->withBody($body, 'application/json')
+        ])->withoutRedirecting()->withBody($body, 'application/json')
             ->post($url.'/api/v1/integrations/flowtrack/'.$path);
     }
 }

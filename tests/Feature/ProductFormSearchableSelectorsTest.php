@@ -13,7 +13,7 @@ class ProductFormSearchableSelectorsTest extends TestCase
         $upload = file_get_contents(resource_path('views/components/catalog/file-upload.blade.php'));
         $component = \Tests\Support\AdministrationPhase7Source::masterData();
 
-        $this->assertSame(4, substr_count($form, '<x-ui.search-select'));
+        $this->assertSame(5, substr_count($form, '<x-ui.search-select'));
         $this->assertSame(2, substr_count($form, '<x-ui.multi-select'));
         $this->assertSame(2, substr_count($creator, '<x-ui.search-select'));
         $this->assertStringNotContainsString('<select', $form);

@@ -7,6 +7,7 @@ use App\Models\Document;
 use App\Models\FlowJob;
 use App\Models\Inquiry;
 use App\Models\InquiryTask;
+use App\Models\MasterRecord;
 use App\Models\Task;
 use App\Policies\ClientPolicy;
 use App\Policies\DocumentPolicy;
@@ -96,6 +97,13 @@ class AppServiceProvider extends ServiceProvider
 
         foreach (WorkspaceDataObserver::observedModels() as $modelClass) {
             $modelClass::observe(WorkspaceDataObserver::class);
+        }
+
+        // Supplier sync only reacts to writes, after commit. Existing page reads
+        // and master-data screens do not perform any extra catalogue queries.
+        foreach ([MasterRecord::class, FlowJob::class, \App\Models\FlowJobItem::class,
+            Task::class, Document::class] as $modelClass) {
+            $modelClass::observe(\App\Observers\SupplierBridgeSyncObserver::class);
         }
 
         Event::listen(QueryExecuted::class, function (QueryExecuted $event): void {

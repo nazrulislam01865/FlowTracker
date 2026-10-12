@@ -107,6 +107,11 @@ class ProductPriceTableParser
 
             if (str_contains($line, "\t")) {
                 $cells = explode("\t", $line);
+            } elseif (preg_match('/^(Quantity|Qty|Product price|Supplier price|Client price|Price)\s+([0-9.,\s]+)$/iu', $line, $matches)) {
+                // Two-row horizontal Excel tables can also arrive space-separated.
+                // Treat each numeric token as a distinct tier instead of joining
+                // "10 20 30" into the erroneous quantity 102030.
+                $cells = array_merge([$matches[1]], preg_split('/\s+/u', trim($matches[2])) ?: []);
             } elseif (str_contains($line, ',')) {
                 $cells = str_getcsv($line);
             } else {
@@ -114,6 +119,21 @@ class ProductPriceTableParser
                 if (count($cells) < 2) {
                     $cells = preg_split('/\s+/u', $line) ?: [];
                 }
+            }
+
+            // Also handle mixed-tab pastes such as "Quantity\t10 20 30".
+            // Do not split descriptive columns in other supported Excel layouts.
+            if (count($cells) > 1 && preg_match('/^(Quantity|Qty|Product price|Supplier price|Client price|Price)$/iu', trim((string) $cells[0]))) {
+                $expanded = [$cells[0]];
+                foreach (array_slice($cells, 1) as $cell) {
+                    $part = trim((string) $cell);
+                    if (preg_match('/^[0-9.,]+(?:\s+[0-9.,]+)+$/u', $part)) {
+                        array_push($expanded, ...(preg_split('/\s+/u', $part) ?: []));
+                    } else {
+                        $expanded[] = $cell;
+                    }
+                }
+                $cells = $expanded;
             }
 
             $cells = array_values(array_map(
@@ -485,6 +505,11 @@ class ProductPriceTableParser
         $value = trim(str_replace("\xC2\xA0", ' ', (string) $value));
         if ($value === '') {
             return null;
+        }
+
+        if (preg_match('/\d\s+\d/u', $value)
+            && ! preg_match('/^-?\d{1,3}(?: \d{3})+(?:\.\d+)?$/u', $value)) {
+            return null; // Never turn several pasted tiers into one large number.
         }
 
         $value = str_replace([',', '$', '€', '£', ' '], '', $value);

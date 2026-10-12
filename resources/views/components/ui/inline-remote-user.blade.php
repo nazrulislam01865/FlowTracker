@@ -12,6 +12,7 @@
     'parentId' => null,
     'externalTrigger' => false,
     'instanceKey' => '',
+    'allowSupplier' => false,
 ])
 @php
     $resolvedLabel = $selectedLabel ?: $placeholder;
@@ -135,6 +136,12 @@
             <span>{{ $placeholder }}</span><small>Clear</small>
         </button>
 
+        @if($allowSupplier)
+            <button type="button" class="ft-remote-filter-option"
+                x-on:click.stop="select({ id:'supplier', label:'Supplier' }); emitSelection('supplier', 'Supplier', '')">
+                <span>Supplier</span><small>From order product</small>
+            </button>
+        @endif
         <div id="{{ $listboxId }}" class="ft-remote-filter-list" role="listbox">
             <template x-if="loading">
                 <div><div class="ft-filter-skeleton"></div><div class="ft-filter-skeleton"></div></div>

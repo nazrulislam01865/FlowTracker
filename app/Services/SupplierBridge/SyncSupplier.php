@@ -4,6 +4,7 @@ namespace App\Services\SupplierBridge;
 
 use App\Models\MasterRecord;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
 /** Supplier identity and approved product catalogue only: never client/customer data. */
@@ -25,15 +26,18 @@ final class SyncSupplier
         $hasLinks = Schema::hasTable('product_supplier_links');
         $products = MasterRecord::query()->forWorkspace($workspace)->ofType('product')
             ->where(function ($query) use ($id, $workspace, $hasLinks, $reverseIds, $reverseCodes): void {
-                $query->where('metadata->supplier_id', $id)
-                    ->orWhere('metadata->default_supplier_id', $id)
-                    ->orWhereJsonContains('metadata->supplier_ids', $id);
+                // The normalized tag table is authoritative once installed.
                 if ($hasLinks) {
-                    $query->orWhereExists(fn ($links) => $links->selectRaw('1')->from('product_supplier_links')
+                    $query->whereExists(fn ($links) => $links->selectRaw('1')->from('product_supplier_links')
                         ->whereColumn('product_supplier_links.product_id', 'master_records.id')
                         ->where('product_supplier_links.workspace_id', $workspace)
                         ->where('product_supplier_links.supplier_id', $id));
+                    return;
                 }
+                // Legacy fallback only for pre-migration databases.
+                $query->where('metadata->supplier_id', $id)
+                    ->orWhere('metadata->default_supplier_id', $id)
+                    ->orWhereJsonContains('metadata->supplier_ids', $id);
                 if ($reverseIds !== []) $query->orWhereIn('id', $reverseIds);
                 if ($reverseCodes !== []) {
                     $query->orWhereIn('code', $reverseCodes);
@@ -43,49 +47,86 @@ final class SyncSupplier
                     if ($displayIds !== []) $query->orWhereIn('id', $displayIds);
                 }
             })
-            ->orderBy('id')->limit(2001)->get(['id', 'type', 'code', 'name', 'status']);
+            ->orderBy('id')->limit(2001)->get(['id', 'type', 'code', 'name', 'status', 'metadata']);
         if ($products->count() > 2000) {
             throw new RuntimeException('Supplier has more than 2,000 products; catalogue sync was not truncated.');
         }
-        if ($products->isEmpty()) {
-            return false; // No product assignment: no supplier catalogue is published.
-        }
+        // One read for all supplier-specific overrides; never query per product.
+        $overrides = DB::table('supplier_product_prices')->where('workspace_id', $workspace)
+            ->where('supplier_id', $id)->whereIn('product_id', $products->pluck('id'))
+            ->pluck('price_breakpoints', 'product_id');
+        $pricing = app(SupplierPricing::class);
+        // Review outcomes travel with the next catalogue reconciliation, including rejections.
+        $decisions = DB::table('supplier_price_proposals')->where('supplier_id', $id)
+            ->whereIn('status', ['approved', 'rejected', 'stale'])->orderByDesc('id')->limit(500)
+            ->get(['request_uuid', 'status', 'review_note'])->map(fn ($row) => [
+                'request_uuid' => $row->request_uuid, 'status' => $row->status,
+                'review_note' => $row->review_note,
+            ])->all();
         $response = $this->portal->post('suppliers', [
             'supplier_id' => $id,
+            'catalog_revision' => (int) now()->format('Uu'),
             'reference' => 'FLOWTRACK-'.$id,
             'name' => (string) $supplier->name,
             'short_code' => $supplier->supplierShortCode(),
             'active' => $supplier->status === 'active',
-            'products' => $products->map(fn ($product) => [
-                'id' => (int) $product->id,
-                'code' => $product->productDisplayCode(),
-                'name' => (string) $product->name,
-                'active' => $product->status === 'active',
-            ])->all(),
+            'products' => $products->map(function ($product) use ($overrides, $pricing): array {
+                $raw = $overrides->get($product->id);
+                $rows = $raw !== null ? $pricing->normalize(json_decode((string) $raw, true) ?: [])
+                    : $pricing->normalize($product->supplierPriceBreakpoints());
+                return [
+                    'id' => (int) $product->id,
+                    'code' => $product->productDisplayCode(),
+                    'name' => (string) $product->name,
+                    'active' => $product->status === 'active',
+                    'supplier_prices' => $rows,
+                    'price_version' => $pricing->version($rows),
+                ];
+            })->all(),
+            'decisions' => $decisions,
         ]);
         if (! $response->successful()) {
-            throw new RuntimeException('Supplier catalogue API returned HTTP '.$response->status().'.');
+            $fields = $response->status() === 422 ? $response->json('invalid_fields', []) : [];
+            $detail = is_array($fields) && $fields !== []
+                ? ' Invalid fields: '.implode(', ', array_slice(array_filter($fields, 'is_string'), 0, 10)).'.'
+                : '';
+            throw new RuntimeException('Supplier catalogue API returned HTTP '.$response->status().'.'.$detail);
         }
-        return true;
+        return $products->isNotEmpty();
     }
 
-    /** Secrets are never stored in FlowTracker. Send once over the signed HTTPS API. */
-    public function provision(int $supplierId, string $username, string $email, string $password, string $contact): void
+    /** Secrets are transmitted only to the isolated portal over the signed API. */
+    public function provision(int $supplierId, string $username, string $email, ?string $password, string $contact, bool $requirePasswordChange = false, bool $syncCatalog = true): void
     {
-        if (! $this->sync($supplierId)) {
+        if ($syncCatalog && ! $this->sync($supplierId)) {
             throw new RuntimeException('Assign at least one product before creating supplier portal access.');
         }
-        $response = $this->portal->post('supplier-access', [
+        $payload = [
             'supplier_id' => $supplierId,
             'username' => $username,
             'email' => $email,
-            'password' => $password,
             'name' => $contact,
-        ]);
+        ];
+        if ($password !== null && $password !== '') {
+            $payload['password'] = $password;
+            $payload['require_password_change'] = $requirePasswordChange;
+        }
+        $response = $this->portal->post('supplier-access', $payload);
         if (! $response->successful()) {
             throw new RuntimeException(match ($response->status()) {
-                409 => 'Username or email already belongs to another portal account. Existing accounts are not reassigned automatically.',
+                409 => 'Username or email already belongs to another portal account, or an initial password is required.',
                 default => 'Supplier account API returned HTTP '.$response->status().'.',
+            });
+        }
+    }
+
+    public function sendPasswordReset(int $supplierId): void
+    {
+        $response = $this->portal->post('supplier-access/reset', ['supplier_id' => $supplierId]);
+        if (! $response->successful()) {
+            throw new RuntimeException(match ($response->status()) {
+                429 => 'A reset link was recently requested. Please wait before retrying.',
+                default => 'The supplier portal could not send the password reset email.',
             });
         }
     }

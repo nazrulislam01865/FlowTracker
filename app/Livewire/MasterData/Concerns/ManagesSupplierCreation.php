@@ -94,7 +94,7 @@ trait ManagesSupplierCreation
             $this->validate([
                 'portalUsername' => ['required', 'string', 'regex:/^[A-Za-z0-9._-]+$/', 'min:3', 'max:60'],
                 'portalEmail' => ['required', 'email:rfc', 'max:254'],
-                'portalPassword' => ['required', 'string', \Illuminate\Validation\Rules\Password::min(12)->letters()->mixedCase()->numbers()],
+                'portalPassword' => ['required', 'string', \Illuminate\Validation\Rules\Password::min(8)],
                 'status' => ['required', Rule::in(['active'])],
             ]);
         }
@@ -158,6 +158,7 @@ trait ManagesSupplierCreation
             return $supplier;
         });
 
+        app(\App\Services\SupplierBridge\MarkCatalogDirty::class)->supplierIds($workspaceId, [(int) $supplier->id]);
         if ($provisionLogin) {
             try {
                 app(\App\Services\SupplierBridge\SyncSupplier::class)->provision(
@@ -180,7 +181,7 @@ trait ManagesSupplierCreation
             }
         } elseif (config('supplier_bridge.enabled')) {
             try {
-                app(\App\Services\SupplierBridge\SyncSupplier::class)->sync((int) $supplier->id);
+                app(\App\Services\SupplierBridge\SendCatalogImmediately::class)->send((int) $supplier->id);
             } catch (\Throwable $exception) {
                 session()->flash('warning', 'Supplier created locally. Portal synchronization will retry from the catalogue sync command.');
             }

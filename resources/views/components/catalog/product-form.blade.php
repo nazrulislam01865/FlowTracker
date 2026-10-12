@@ -20,6 +20,9 @@
     'selectedProductCategoryId' => null,
     'selectedSubcategory' => '',
     'pricePreview' => [],
+    'customerPricePreview' => [],
+    'clientPriceRows' => [],
+    'supplierPriceRows' => [],
     'remoteSurchargePreview' => [],
     'productOptions' => [],
     'productOptionUploads' => [],
@@ -38,6 +41,14 @@
     $existingDocs = collect($editProduct?->productDocuments() ?? []);
     $certificateDoc = $removeCertificate ? null : $existingDocs->firstWhere('kind', 'certificate');
     $templateDoc = $removeTemplate ? null : $existingDocs->firstWhere('kind', 'template');
+    $clientLabelsById = collect($clients)->mapWithKeys(fn ($client) => [
+        (int) data_get($client, 'id', 0) => (string) data_get($client, 'name', data_get($client, 'label', '')),
+    ]);
+    // Only selected clients get visible editors; preserve legacy price rows in
+    // component state so a change in availability never deletes saved pricing.
+    $taggedClientIds = array_map('intval', $clientIds);
+    $visibleClientPriceRows = collect($clientPriceRows)->filter(fn ($row) =>
+        in_array((int) ($row['client_id'] ?? 0), $taggedClientIds, true));
     $productCategoryOptions = collect($parents)->map(fn($category) => [
         'id' => $category->id,
         'label' => $category->name,
@@ -209,55 +220,89 @@
             </x-catalog.product-section>
         @endif
 
-        <x-catalog.product-section number="3" title="Product pricing" subtitle="Paste the complete Quantity and Product price table directly from Excel.">
-            <label class="ft-product-field ft-product-price-table-field">
-                <span>Price table <em>Optional</em></span>
-                <textarea
-                    wire:model.change="productPriceTable"
-                    rows="6"
-                    spellcheck="false"
-                    placeholder="Paste the Excel price table here"
-                ></textarea>
-                <small>Excel price tables are detected automatically, including supplier tables with quantity columns.</small>
-                @error('productPriceTable')<b class="validation-error">{{ $message }}</b>@enderror
-            </label>
-
-            @if(count($pricePreview))
-                <div class="ft-product-price-preview-wrap">
-                    <table class="ft-product-price-preview">
-                        <thead>
-                            <tr>
-                                <th>Quantity</th>
-                                @foreach($pricePreview as $priceRow)
-                                    <th>{{ number_format((int) $priceRow['quantity']) }}</th>
-                                @endforeach
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <th>Product price</th>
-                                @foreach($pricePreview as $priceRow)
-                                    <td>{{ (float) $priceRow['price'] === 0.0 ? '0' : rtrim(rtrim(number_format((float) $priceRow['price'], 6, '.', ''), '0'), '.') }}</td>
-                                @endforeach
-                            </tr>
-                            @if(count($remoteSurchargePreview))
-                                @php
-                                    $remoteSurchargeByQuantity = collect($remoteSurchargePreview)->keyBy('quantity');
-                                @endphp
-                                <tr>
-                                    <th>Remote surcharge</th>
-                                    @foreach($pricePreview as $priceRow)
-                                        @php
-                                            $remotePrice = data_get($remoteSurchargeByQuantity->get($priceRow['quantity']), 'price');
-                                        @endphp
-                                        <td>{{ $remotePrice === null ? '—' : ((float) $remotePrice === 0.0 ? '0' : rtrim(rtrim(number_format((float) $remotePrice, 6, '.', ''), '0'), '.')) }}</td>
-                                    @endforeach
-                                </tr>
-                            @endif
-                        </tbody>
-                    </table>
+        <x-catalog.product-section number="3" title="Product pricing" subtitle="Maintain supplier costs and client selling prices separately. Client prices automatically apply in orders and inquiries.">
+            <div class="ft-product-supplier-price-list">
+                <div class="ft-product-price-section-header" style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin:18px 0 10px">
+                    <strong>Supplier-based price tables ({{ count($supplierPriceRows) }})</strong>
                 </div>
-            @endif
+                <small>Each tagged supplier has its own quantity-based cost table. Approved supplier requests appear here automatically. Supplier costs do not affect client selling prices.</small>
+                @forelse($supplierPriceRows as $supplierPriceIndex => $supplierPrice)
+                    <div class="ft-product-client-price-entry" wire:key="product-supplier-price-{{ $supplierPrice['key'] ?? $supplierPriceIndex }}" style="margin-top:14px;padding:14px;border:1px solid var(--ft-border,#d1d5db)">
+                        <strong>{{ $supplierPrice['supplier_name'] ?? ('Supplier #'.$supplierPrice['supplier_id']) }}</strong>
+                        <label class="ft-product-field ft-product-price-table-field" style="margin-top:12px">
+                            <span>Quantity / Supplier unit price</span>
+                            <textarea wire:model.change="productSupplierPrices.{{ $supplierPriceIndex }}.table" rows="5" spellcheck="false" placeholder="Paste the Excel Quantity and Product price table here"></textarea>
+                            @error('productSupplierPrices.'.$supplierPriceIndex.'.table')<b class="validation-error">{{ $message }}</b>@enderror
+                        </label>
+                        @if(count($supplierPrice['preview'] ?? []))
+                            <div class="ft-product-price-preview-wrap"><table class="ft-product-price-preview">
+                                <thead><tr><th>Quantity</th>
+                                    @foreach($supplierPrice['preview'] as $breakpoint)<th>{{ number_format((int) $breakpoint['quantity']) }}</th>@endforeach
+                                </tr></thead><tbody><tr><th>Supplier price</th>
+                                    @foreach($supplierPrice['preview'] as $breakpoint)<td>{{ (float) $breakpoint['price'] === 0.0 ? '0' : rtrim(rtrim(number_format((float) $breakpoint['price'], 6, '.', ''), '0'), '.') }}</td>@endforeach
+                                </tr></tbody></table></div>
+                        @endif
+                    </div>
+                @empty
+                    <small>Tag a supplier above to enter that supplier's quantity and unit prices.</small>
+                @endforelse
+                @error('productSupplierPrices')
+                    <div class="ft-product-price-refresh" style="margin-top:10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+                        <b class="validation-error">{{ $message }}</b>
+                        <button type="button" class="ft-product-page-btn is-secondary"
+                            wire:click="refreshProductSupplierPrices"
+                            wire:confirm="Reload current supplier prices? Unsaved changes to supplier price tables will be replaced, but all other product fields will stay as they are.">Reload supplier prices</button>
+                    </div>
+                @enderror
+            </div>
+            <div class="ft-product-client-price-list">
+                <div class="ft-product-price-section-header" style="margin:18px 0 10px">
+                    <strong>Client price tables ({{ $clientAvailabilityMode === 'specific' ? $visibleClientPriceRows->count() : 1 }})</strong>
+                </div>
+                <small>{{ $clientAvailabilityMode === 'all'
+                    ? 'One quantity-based selling-price table applies to all clients. Supplier costs remain separate.'
+                    : 'Each tagged client has its own quantity-based selling-price table, separate from supplier costs. Empty tables are not saved.' }}</small>
+                @if($clientAvailabilityMode === 'specific')
+                    @forelse($visibleClientPriceRows as $clientPriceIndex => $clientPrice)
+                        <div class="ft-product-client-price-entry" wire:key="product-client-price-{{ $clientPrice['key'] ?? $clientPriceIndex }}" style="margin-top:14px;padding:14px;border:1px solid var(--ft-border,#d1d5db)">
+                            <strong>{{ $clientLabelsById->get((int) ($clientPrice['client_id'] ?? 0)) ?: 'Client #'.($clientPrice['client_id'] ?? '') }}</strong>
+                            <label class="ft-product-field ft-product-price-table-field" style="margin-top:12px">
+                                <span>Quantity / Client unit price</span>
+                                <textarea wire:model.change="productClientPrices.{{ $clientPriceIndex }}.table" rows="5" spellcheck="false" placeholder="Paste the Excel Quantity and Product price table here"></textarea>
+                                @error('productClientPrices.'.$clientPriceIndex.'.table')<b class="validation-error">{{ $message }}</b>@enderror
+                            </label>
+                            @if(count($clientPrice['preview'] ?? []))
+                                <div class="ft-product-price-preview-wrap"><table class="ft-product-price-preview">
+                                    <thead><tr><th>Quantity</th>
+                                        @foreach($clientPrice['preview'] as $breakpoint)<th>{{ number_format((int) $breakpoint['quantity']) }}</th>@endforeach
+                                    </tr></thead><tbody><tr><th>Client price</th>
+                                        @foreach($clientPrice['preview'] as $breakpoint)<td>{{ (float) $breakpoint['price'] === 0.0 ? '0' : rtrim(rtrim(number_format((float) $breakpoint['price'], 6, '.', ''), '0'), '.') }}</td>@endforeach
+                                    </tr></tbody></table></div>
+                            @endif
+                        </div>
+                    @empty
+                        <small>Select one or more clients above to enter their quantity and selling prices.</small>
+                    @endforelse
+                @else
+                    <div class="ft-product-client-price-entry" wire:key="product-all-clients-price" style="margin-top:14px;padding:14px;border:1px solid var(--ft-border,#d1d5db)">
+                        <strong>All clients</strong>
+                        <label class="ft-product-field ft-product-price-table-field" style="margin-top:12px">
+                            <span>Quantity / Client unit price</span>
+                            <textarea wire:model.change="productCustomerPriceTable" rows="5" spellcheck="false" placeholder="Paste the Excel Quantity and Product price table here"></textarea>
+                            @error('productCustomerPriceTable')<b class="validation-error">{{ $message }}</b>@enderror
+                        </label>
+                        @if(count($customerPricePreview))
+                            <div class="ft-product-price-preview-wrap"><table class="ft-product-price-preview">
+                                <thead><tr><th>Quantity</th>
+                                    @foreach($customerPricePreview as $breakpoint)<th>{{ number_format((int) $breakpoint['quantity']) }}</th>@endforeach
+                                </tr></thead><tbody><tr><th>Client price</th>
+                                    @foreach($customerPricePreview as $breakpoint)<td>{{ (float) $breakpoint['price'] === 0.0 ? '0' : rtrim(rtrim(number_format((float) $breakpoint['price'], 6, '.', ''), '0'), '.') }}</td>@endforeach
+                                </tr></tbody></table></div>
+                        @endif
+                    </div>
+                @endif
+                @error('productClientPrices')<b class="validation-error">{{ $message }}</b>@enderror
+            </div>
         </x-catalog.product-section>
 
         <x-catalog.product-section number="4" title="Product options" subtitle="Add optional choices such as color, size or material. An option can also add an extra unit charge." class="ft-product-options-section">

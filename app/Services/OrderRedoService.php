@@ -1043,12 +1043,14 @@ class OrderRedoService
             $catalogValue = 0.0;
             $resolvedQuantity = 0;
             $allCatalogLinesPriced = true;
+            $items->loadMissing(['catalogProduct.clientPrices' => fn ($query) =>
+                $query->where('client_id', (int) $order->client_id)]);
 
             foreach ($items as $item) {
                 $quantity = max(0, (int) $item->quantity);
                 if ($quantity === 0) continue;
 
-                $price = $item->catalogProduct?->productPriceForQuantity($quantity);
+                $price = $item->catalogProduct?->productPriceForQuantity($quantity, (int) $order->client_id);
                 if ($price === null || $price <= 0) {
                     $allCatalogLinesPriced = false;
                     break;
