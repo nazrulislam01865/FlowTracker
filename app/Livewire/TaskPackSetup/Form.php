@@ -120,7 +120,6 @@ class Form extends Component
         $index = (int) $matches[1];
         abort_unless(array_key_exists($index, $this->tasks), 422);
 
-        abort_unless(($this->tasks[$index]['default_assignee_type'] ?? 'user') === 'user', 422);
         $raw = trim((string) ($value ?? ''));
         if ($raw === '') {
             $this->tasks[$index]['default_assignee_id'] = null;
@@ -348,7 +347,6 @@ class Form extends Component
         $errors = [];
 
         $assigneeIds = collect($tasks)
-            ->filter(fn ($task) => ($task['default_assignee_type'] ?? 'user') === 'user')
             ->pluck('default_assignee_id')
             ->filter(fn ($id) => filled($id))
             ->map(fn ($id) => (int) $id)
@@ -407,7 +405,7 @@ class Form extends Component
 
         foreach ($tasks as $index => $task) {
             $assigneeId = filled($task['default_assignee_id'] ?? null) ? (int) $task['default_assignee_id'] : null;
-            if (($task['default_assignee_type'] ?? 'user') === 'user' && $assigneeId && ! $validAssigneeLookup->has($assigneeId)) {
+            if ($assigneeId && ! $validAssigneeLookup->has($assigneeId)) {
                 $errors["tasks.$index.default_assignee_id"] = 'The selected assignee is invalid.';
             }
 

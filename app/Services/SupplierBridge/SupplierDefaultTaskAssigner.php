@@ -35,7 +35,13 @@ final class SupplierDefaultTaskAssigner
 
         $supplierIds = $this->orderSupplierIds($order->id);
         $supplierId = self::uniqueSupplierId($supplierIds);
-        $delegates = $supplierId ? $this->delegates($order, $actor) : [];
+        // A configured internal backup must also be eligible to authorize the
+        // supplier assignment, subject to the same normal task permissions.
+        $backupIds = $tasks->filter(fn (Task $task) => $task->assignee_id
+            && $task->setup_assignee_id
+            && (int) $task->assignee_id === (int) $task->setup_assignee_id)
+            ->pluck('assignee_id')->all();
+        $delegates = $supplierId ? $this->delegates($order, $actor, $backupIds) : [];
         $access = app(AccessControlService::class);
         $changed = false;
 
@@ -54,8 +60,11 @@ final class SupplierDefaultTaskAssigner
             $key = SupplierWorkflowProjection::actionKey(
                 OrderTaskRequirement::automationKey($task), (int) ($task->phase?->sequence ?? 0)
             );
-            // Never override a manually assigned internal employee.
-            $hasInternalOverride = (bool) $task->assignee_id && ! $existing;
+            // The internal Task Pack backup is not a manual override: both
+            // supplier and employee must remain assigned to this same task.
+            $hasInternalOverride = ! $existing && (bool) $task->assignee_id
+                && (! $task->setup_assignee_id
+                    || (int) $task->assignee_id !== (int) $task->setup_assignee_id);
             // A creator may lack access after ownership changes. Choose the
             // first eligible order creator/owner/coordinator for THIS task,
             // without a new user query for each task or bypassing permissions.
@@ -197,12 +206,12 @@ final class SupplierDefaultTaskAssigner
     }
 
     /** @return list<User> Only eligible order-associated actors, loaded once. */
-    private function delegates(FlowJob $order, ?User $actor): array
+    private function delegates(FlowJob $order, ?User $actor, array $backupIds = []): array
     {
-        $candidateIds = array_values(array_unique(array_filter([
+        $candidateIds = array_values(array_unique(array_filter(array_merge([
             (int) ($actor?->id ?? 0), (int) $order->created_by,
             (int) $order->owner_id, (int) $order->coordinator_id,
-        ])));
+        ], $backupIds))));
         if ($candidateIds === []) return [];
         $users = User::query()->whereIn('id', $candidateIds)
             ->where('is_active', true)->get()->keyBy('id');

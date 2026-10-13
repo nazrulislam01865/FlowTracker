@@ -46,7 +46,12 @@
                             <div>
                                 <b><span class="ft-task-color-dot" aria-hidden="true"></span>{{ $loop->iteration }}. {{ $item->title }}</b>
                                 <small>
-                                    {{ $item->defaultAssignee?->name ?? 'Unassigned' }} · Due set from Task details ·
+                                    @if(($item->default_assignee_type ?? 'user') === 'supplier')
+                                        Supplier{{ $item->defaultAssignee ? ' + '.$item->defaultAssignee->name.' (internal backup)' : '' }}
+                                    @else
+                                        {{ $item->defaultAssignee?->name ?? 'Unassigned' }}
+                                    @endif
+                                    · Due set from Task details ·
                                     @if($item->priority)
                                         @php
                                             $itemPriorityColor = $masterData->displayColorFor('priority', $item->priority->name);

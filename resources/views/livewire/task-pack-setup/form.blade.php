@@ -109,11 +109,10 @@
                                     </select>
                                     <small>Supplier uses the assigned order product supplier when there is exactly one. Available for the first five Order stages.</small>
                                 </div>
-                                @if(($task['default_assignee_type'] ?? 'user') !== 'supplier')
                                 <div class="ft-admin-field">
                                     <x-ui.search-select
                                         class="ft-taskpack-assignee-filter"
-                                        label="Internal user"
+                                        :label="($task['default_assignee_type'] ?? 'user') === 'supplier' ? 'Internal backup assignee (optional)' : 'Internal user'"
                                         property="tasks.{{ $index }}.default_assignee_id"
                                         type="users"
                                         context="task-pack-setup"
@@ -124,11 +123,13 @@
                                         :initial-options="$assigneeFilterOptions"
                                         :menu-width="420"
                                         :fixed-menu="true"
-                                        wire:key="task-pack-assignee-{{ $task['id'] ?? 'new-'.$index }}-{{ $index }}-{{ $task['default_assignee_id'] ?? 'none' }}"
+                                        wire:key="task-pack-assignee-{{ $task['id'] ?? 'new-'.$index }}-{{ $index }}-{{ $task['default_assignee_type'] ?? 'user' }}-{{ $task['default_assignee_id'] ?? 'none' }}"
                                     />
+                                    @if(($task['default_assignee_type'] ?? 'user') === 'supplier')
+                                        <small>This internal user can perform the same task if the supplier does not.</small>
+                                    @endif
                                     @error("tasks.$index.default_assignee_id")<div class="validation-error">{{ $message }}</div>@enderror
                                 </div>
-                                @endif
 
                                 @if(($task['default_assignee_type'] ?? 'user') !== 'supplier')
                                 <div class="ft-admin-field">

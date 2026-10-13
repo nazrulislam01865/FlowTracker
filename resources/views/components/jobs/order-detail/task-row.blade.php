@@ -80,7 +80,9 @@
         $statusClass = 'active';
     }
     $supplierAssigned = $task->relationLoaded('supplierAssignment') && $task->supplierAssignment !== null;
-    $assigneeName = $supplierAssigned ? 'Supplier' : ($task->assignee?->name ?: 'Unassigned');
+    $assigneeName = $supplierAssigned
+        ? 'Supplier'.($task->assignee ? ' + '.$task->assignee->name : '')
+        : ($task->assignee?->name ?: 'Unassigned');
     $assigneeInitials = collect(preg_split('/\s+/', trim($assigneeName)))->filter()->map(fn($part) => mb_strtoupper(mb_substr($part, 0, 1)))->take(2)->implode('');
     $isCancelled = strcasecmp((string) $job->status, 'Cancelled') === 0;
     $showProductionMonitorInline = $isProductionMonitorTask

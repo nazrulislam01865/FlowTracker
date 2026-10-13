@@ -538,7 +538,9 @@ trait ManagesOrderTasks
         $payload = [
             'taskId' => (int) $task->id,
             'assigneeId' => $task->supplierAssignment ? 'supplier' : ($task->assignee_id ? (int) $task->assignee_id : ''),
-            'assigneeName' => (string) ($task->supplierAssignment ? 'Supplier' : ($task->assignee?->name ?: 'Unassigned')),
+            'assigneeName' => (string) ($task->supplierAssignment
+                ? 'Supplier'.($task->assignee ? ' + '.$task->assignee->name : '')
+                : ($task->assignee?->name ?: 'Unassigned')),
             'avatarUrl' => (string) ($task->assignee?->profileImageUrl() ?? ''),
         ];
 
