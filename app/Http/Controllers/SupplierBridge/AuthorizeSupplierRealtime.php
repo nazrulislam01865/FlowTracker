@@ -29,8 +29,8 @@ final class AuthorizeSupplierRealtime extends Controller
         $data = Validator::make(json_decode($body, true) ?: [], [
             'event_id' => ['required', 'uuid', 'in:'.$event],
             'supplier_id' => ['required', 'integer', 'min:1'],
-            'resource' => ['sometimes', 'in:catalog'],
-            'order_id' => ['required_unless:resource,catalog', 'nullable', 'integer', 'min:1'],
+            'resource' => ['sometimes', 'in:catalog,dashboard'],
+            'order_id' => ['required_without:resource', 'nullable', 'integer', 'min:1'],
             'socket_id' => ['required', 'regex:/^\d+\.\d+$/'],
             'channel_name' => ['required', 'string', 'max:150'],
         ])->validate();
@@ -39,6 +39,13 @@ final class AuthorizeSupplierRealtime extends Controller
             abort_unless(\App\Models\MasterRecord::query()->ofType('supplier')
                 ->whereKey($supplierId)->where('status', 'active')->exists(), 403);
             return response()->json($reverb->authenticateSupplierCatalog(
+                (string) $data['socket_id'], (string) $data['channel_name'], $supplierId,
+            ))->header('Cache-Control', 'private, no-store');
+        }
+        if (($data['resource'] ?? null) === 'dashboard') {
+            abort_unless(\App\Models\MasterRecord::query()->ofType('supplier')
+                ->whereKey($supplierId)->where('status', 'active')->exists(), 403);
+            return response()->json($reverb->authenticateSupplierDashboard(
                 (string) $data['socket_id'], (string) $data['channel_name'], $supplierId,
             ))->header('Cache-Control', 'private, no-store');
         }

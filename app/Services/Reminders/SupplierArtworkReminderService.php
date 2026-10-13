@@ -16,11 +16,27 @@ use Illuminate\Support\Facades\DB;
 final class SupplierArtworkReminderService
 {
     public const ARTWORK_EVENT = OrderReminderEventCatalog::ARTWORK_EVENT;
+    public const PORTAL_ACCESS_EVENT = OrderReminderEventCatalog::PORTAL_ACCESS_EVENT;
     public const SECTIONS = ['greeting', 'order_summary', 'confirmation', 'artwork', 'action', 'support', 'internal'];
-    public const TOKENS = ['supplier_name', 'order_number', 'product_name', 'quantity', 'artwork_confirmed_date', 'event_name', 'completed_date', 'recipient_name'];
+    public const TOKENS = ['supplier_name', 'order_number', 'product_name', 'quantity', 'artwork_confirmed_date', 'event_name', 'completed_date', 'recipient_name', 'login_email', 'username', 'dashboard_link'];
 
     public function defaults(string $eventKey = self::ARTWORK_EVENT): array
     {
+        if ($eventKey === self::PORTAL_ACCESS_EVENT) {
+            return [
+                'event_key' => $eventKey,
+                'subject' => 'Your supplier portal access is ready',
+                'preheader' => 'Your supplier dashboard login details',
+                'heading' => 'Your supplier portal access is ready',
+                'cta' => 'Open Supplier Dashboard',
+                'message' => 'Your supplier portal account is ready. Sign in using the login email and username below. For security, your password is not included in this email. Use the secure password-setup email from the portal when provided, or choose Forgot password on the login page.',
+                'sections' => ['greeting' => true, 'order_summary' => false, 'confirmation' => false, 'artwork' => false, 'action' => true, 'support' => true, 'internal' => false],
+                'missing_email' => 'skip',
+                'recipient_type' => 'supplier',
+                'recipient_user_id' => null,
+                'delay_minutes' => 0,
+            ];
+        }
         return [
             'event_key' => $eventKey,
             'subject' => $eventKey === self::ARTWORK_EVENT ? 'Artwork confirmed for Order {{order_number}}' : '{{event_name}} for Order {{order_number}}',
@@ -206,6 +222,9 @@ final class SupplierArtworkReminderService
     public function sampleForConfig(array $config): array
     {
         $sample = $this->sampleForEvent((string) ($config['event_key'] ?? self::ARTWORK_EVENT));
+        if (($config['event_key'] ?? '') === self::PORTAL_ACCESS_EVENT) {
+            return $sample;
+        }
         $sample['recipient_name'] = match ($config['recipient_type'] ?? 'supplier') {
             'owner' => 'Order owner', 'coordinator' => 'Order coordinator',
             'assignee' => 'Task assignee', 'client' => 'Client contact',
@@ -218,6 +237,13 @@ final class SupplierArtworkReminderService
     public function sampleForEvent(string $eventKey): array
     {
         $sample = $this->sample();
+        if ($eventKey === self::PORTAL_ACCESS_EVENT) {
+            return array_merge($sample, [
+                'recipient_name' => 'Supplier A', 'event_name' => 'Supplier Portal Access',
+                'login_email' => 'supplier@example.com', 'username' => 'supplier.user',
+                'dashboard_link' => (string) (config('supplier_bridge.login_url') ?: 'https://supplier.example.com/login'),
+            ]);
+        }
         if ($eventKey !== self::ARTWORK_EVENT) {
             $parts = explode(':', $eventKey);
             $sample['event_name'] = ucwords(strtolower(str_replace('_', ' ', $parts[1] ?? 'Workflow Task'))).' Completed';
@@ -227,6 +253,16 @@ final class SupplierArtworkReminderService
 
     public function emailHtml(array $config, array $data, bool $test = false): string
     {
+        if (($config['event_key'] ?? '') === self::PORTAL_ACCESS_EVENT) {
+            return app(SupplierPortalAccessReminderService::class)->emailHtml(
+                (string) ($data['supplier_name'] ?? 'Supplier A'),
+                (string) ($data['login_email'] ?? 'supplier@example.com'),
+                (string) ($data['username'] ?? 'supplier.user'),
+                $config,
+                (string) ($data['dashboard_link'] ?? 'https://supplier.example.com/login'),
+                $test,
+            );
+        }
         $sections = $config['sections'] ?? [];
         $artworkEvent = ($config['event_key'] ?? self::ARTWORK_EVENT) === self::ARTWORK_EVENT;
         $profile = app(CompanyProfileService::class)->current();
@@ -265,7 +301,7 @@ final class SupplierArtworkReminderService
         app(EmailService::class)->sendNow(EmailMessage::html(
             $email, '[TEST] '.$this->interpolate($config['subject'], $sample),
             $this->emailHtml($config, $sample, true),
-            ['type' => 'order_supplier_artwork_reminder_test'],
+            ['type' => ($config['event_key'] ?? '') === self::PORTAL_ACCESS_EVENT ? 'supplier_portal_access_test' : 'order_supplier_artwork_reminder_test'],
         ));
     }
 }

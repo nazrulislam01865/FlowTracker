@@ -11,6 +11,10 @@ use RuntimeException;
 /** Deliberately limited supplier-owned snapshot; no customers, margins or internal notes. */
 final class SupplierOrderProjection
 {
+    // Bump when the supplier-visible projection semantics change. Legacy outbox
+    // rows are reconciled once; normal writes still deliver event-first.
+    public const FORMAT_VERSION = 2;
+
     private const TASKS = [
         2 => [
             'ART_PREPARE_UPLOAD' => 'Prepare & Upload Artwork',

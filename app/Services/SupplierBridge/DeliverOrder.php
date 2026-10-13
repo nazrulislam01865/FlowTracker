@@ -22,7 +22,7 @@ final class DeliverOrder
             ->where(function ($query): void {
                 $query->whereNull('next_attempt_at')->orWhere('next_attempt_at', '<=', now());
             })
-            ->update(['status' => 'sending', 'locked_at' => now(), 'updated_at' => now()]);
+            ->update(['status' => 'sending', 'locked_at' => now(), 'next_attempt_at' => null, 'updated_at' => now()]);
 
         if ($claimed !== 1) {
             return false;
@@ -42,6 +42,12 @@ final class DeliverOrder
             $order = \App\Models\FlowJob::query()->find((int) $delivery->flow_job_id);
             if ($order && strcasecmp((string) $order->status, 'Draft') !== 0) {
                 app(SupplierDefaultTaskAssigner::class)->syncForOrder($order);
+                // A completed predecessor on an imported/older order can leave
+                // its next Task Pack row at Not Started. Bring that row to
+                // canonical Ready before sending the action snapshot. This
+                // uses FlowTracker's existing sequence rules (never bypasses
+                // a required predecessor or manually approves a task).
+                app(\App\Services\OrderTaskSequenceService::class)->synchronizeCurrentPhase($order);
             }
 
             // Rebuild at delivery time so retries also carry current stage, files and assigned lines.
@@ -86,9 +92,18 @@ final class DeliverOrder
             // A workflow/task change during the HTTP request marks this
             // delivery pending again. Do not erase that newer work when the
             // in-flight snapshot succeeds.
+            // A successful acknowledgement must also record the projection
+            // format that was actually accepted. Without this marker, a code
+            // upgrade can leave an old but "delivered" snapshot permanently
+            // missing new artwork/action fields until another database write.
+            // Keep the existing outbox metadata; no schema change is needed.
+            $metadata = json_decode((string) $delivery->payload, true);
+            $metadata = is_array($metadata) ? $metadata : [];
+            $metadata['projection_version'] = SupplierOrderProjection::FORMAT_VERSION;
             $applied = DB::table('supplier_order_deliveries')->where('id', $id)
-                ->where('status', 'sending')->update([
+                ->where('status', 'sending')->whereNull('next_attempt_at')->update([
                 'status' => 'delivered', 'delivered_at' => $snapshotAt, 'locked_at' => null,
+                'payload' => json_encode($metadata, JSON_THROW_ON_ERROR),
                 'last_error' => null, 'updated_at' => now(),
             ]);
             if ($applied === 1) {
@@ -96,16 +111,35 @@ final class DeliverOrder
                     app(\App\Services\ReverbChannelService::class)->triggerSupplierOrder(
                         (int) $delivery->supplier_id, (int) $delivery->flow_job_id,
                     );
+                    app(\App\Services\ReverbChannelService::class)->triggerSupplierDashboard(
+                        (int) $delivery->supplier_id,
+                    );
                 } catch (\Throwable $exception) {
                     // Realtime is best-effort: do not retry an already accepted
                     // signed snapshot when the WebSocket server is unavailable.
                     Log::warning('Supplier realtime notification unavailable.', ['delivery_id' => $id]);
                 }
             }
+            if ($applied !== 1) {
+                // The task changed during delivery. Release this HTTP claim and
+                // deliver the newer snapshot immediately, not 15 minutes later.
+                $dirty = DB::table('supplier_order_deliveries')->where('id', $id)
+                    ->where('status', 'sending')->whereNotNull('next_attempt_at')
+                    ->update(['status' => 'pending', 'next_attempt_at' => null,
+                        'locked_at' => null, 'attempts' => 0, 'updated_at' => now()]);
+                if ($dirty && config('queue.default') !== 'sync') {
+                    try {
+                        \App\Jobs\DeliverChangedSupplierOrder::dispatch((int) $delivery->flow_job_id)
+                            ->onQueue('supplier-sync');
+                    } catch (\Throwable $error) {
+                        Log::warning('Newer supplier order delivery deferred to scheduler.', ['delivery_id' => $id]);
+                    }
+                }
+            }
             return true;
         } catch (\Throwable $exception) {
             $attempts = (int) $delivery->attempts + 1;
-            DB::table('supplier_order_deliveries')->where('id', $id)->update([
+            DB::table('supplier_order_deliveries')->where('id', $id)->where('status', 'sending')->update([
                 'status' => 'pending', 'attempts' => $attempts, 'locked_at' => null,
                 'next_attempt_at' => now()->addSeconds(min(3600, 30 * (2 ** min($attempts, 7)))),
                 'last_error' => substr($exception instanceof RuntimeException ? $exception->getMessage() : 'Supplier transport unavailable', 0, 160),

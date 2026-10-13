@@ -173,17 +173,18 @@ trait ManagesSupplierCreation
                 $metadata['portal_email'] = strtolower(trim($this->portalEmail));
                 $metadata['portal_linked_at'] = now()->toIso8601String();
                 $supplier->update(['metadata' => $metadata]);
+                try {
+                    app(\App\Services\Reminders\SupplierPortalAccessReminderService::class)
+                        ->queue($supplier, $this->portalEmail, $this->portalUsername, true);
+                } catch (\Throwable $notificationError) {
+                    report($notificationError);
+                    session()->flash('warning', 'Supplier portal access was created, but the access email could not be queued.');
+                }
                 session()->flash('success', 'Supplier and portal login created successfully.');
             } catch (\Throwable $exception) {
                 session()->flash('warning', 'Supplier saved, but portal login was not created. Open Edit supplier to retry without recreating this supplier.');
             } finally {
                 $this->portalPassword = '';
-            }
-        } elseif (config('supplier_bridge.enabled')) {
-            try {
-                app(\App\Services\SupplierBridge\SendCatalogImmediately::class)->send((int) $supplier->id);
-            } catch (\Throwable $exception) {
-                session()->flash('warning', 'Supplier created locally. Portal synchronization will retry from the catalogue sync command.');
             }
         }
         $assigned = $codeRows->where('valid', true)->count();

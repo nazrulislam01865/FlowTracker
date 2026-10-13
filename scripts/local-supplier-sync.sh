@@ -87,7 +87,13 @@ start() {
     elif [[ "$command" == 'worker' ]]; then
         # Process supplier/order jobs, but do not send queued customer emails
         # as a side effect of starting a local development environment.
-        ( cd "$dir" && exec "$PHP_BIN" artisan queue:work database --queue=default,realtime,notifications --sleep=1 --tries=3 --timeout=120 ) >> "$logfile" 2>&1 &
+        ( cd "$dir" && exec "$PHP_BIN" artisan queue:work --queue=default,realtime,notifications --sleep=1 --tries=3 --timeout=120 ) >> "$logfile" 2>&1 &
+    elif [[ "$command" == 'buyer-supplier-worker' ]]; then
+        # Do not let general notifications/emails block task and order updates.
+        ( cd "$dir" && exec "$PHP_BIN" artisan queue:work --queue=supplier-sync --sleep=1 --tries=1 --timeout=120 ) >> "$logfile" 2>&1 &
+    elif [[ "$command" == 'supplier-delivery-worker' ]]; then
+        # Large quotation attachments cannot block interactive order/image refresh jobs.
+        ( cd "$dir" && exec "$PHP_BIN" artisan queue:work --queue=supplier-deliveries --sleep=1 --tries=1 --timeout=900 ) >> "$logfile" 2>&1 &
     else
         ( cd "$dir" && exec "$PHP_BIN" artisan schedule:work ) >> "$logfile" 2>&1 &
     fi
@@ -101,6 +107,9 @@ fi
 start "$BUYER" 'flowtracker-scheduler' scheduler
 start "$PORTAL" 'supplier-scheduler' scheduler
 start "$BUYER" 'flowtracker-worker' worker
+start "$BUYER" 'flowtracker-supplier-worker' buyer-supplier-worker
+start "$PORTAL" 'supplier-worker' worker
+start "$PORTAL" 'supplier-quotation-worker' supplier-delivery-worker
 # Reuse an existing local Reverb service, otherwise start the configured one.
 # This check avoids a duplicate WebSocket process on port 8080.
 if "$PHP_BIN" -r '$s=@stream_socket_server("tcp://127.0.0.1:8080",$e,$m); if(!$s){exit(1);} fclose($s);' 2>/dev/null; then
@@ -109,25 +118,30 @@ else
     echo 'Existing service detected on Reverb port 8080; verify it uses this FlowTracker APP_KEY.'
 fi
 
-# /up exists in both projects; wait for both before reporting success.
-for port in 8000 8001; do
-    ready=0
-    for attempt in 1 2 3 4 5 6 7 8 9 10; do
-        if curl -fsS --max-time 2 "http://127.0.0.1:${port}/up" >/dev/null 2>&1; then
-            ready=1
-            break
+# Health-check only servers that this runner started. With --schedulers-only,
+# websites run in separate terminals and may legitimately be offline: workers
+# must stay alive so the database outboxes can retry when connectivity returns.
+if [[ "$RUN_MODE" == 'all' ]]; then
+    for port in 8000 8001; do
+        ready=0
+        for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            if curl -fsS --max-time 2 "http://127.0.0.1:${port}/up" >/dev/null 2>&1; then
+                ready=1
+                break
+            fi
+            sleep 1
+        done
+        if [[ "$ready" != 1 ]]; then
+            echo "Server on port $port did not become ready. Inspect the local-bridge web logs." >&2
+            exit 1
         fi
-        sleep 1
     done
-    if [[ "$ready" != 1 ]]; then
-        echo "Server on port $port did not become ready. Inspect the local-bridge web logs." >&2
-        exit 1
-    fi
-done
+fi
 printf '\nFlowTracker:      http://127.0.0.1:8000\nSupplier Portal: http://127.0.0.1:8001\n'
-echo 'Both schedulers, queue worker and Reverb (or existing port 8080 service) are running. Signed deliveries are event-driven; retries remain automatic.'
+echo 'Both schedulers, queue workers and Reverb (or existing port 8080 service) have been started. Signed deliveries are event-driven; retries remain automatic.'
 if [[ "$RUN_MODE" == 'schedulers' ]]; then
-    echo 'Existing servers are reused; keep both local Laravel serve processes running.'
+    echo 'Web servers are managed separately; start FlowTracker on 8000 and Supplier Portal on 8001 in their own terminals.'
+    echo 'Background workers will keep running if either web server is temporarily unavailable.'
 fi
 echo 'Leave this terminal open; press Ctrl+C to stop the processes started by this runner.'
 while true; do

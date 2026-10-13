@@ -63,7 +63,13 @@ final class SyncSupplier
                 'request_uuid' => $row->request_uuid, 'status' => $row->status,
                 'review_note' => $row->review_note,
             ])->all();
+        // The Supplier Portal header must match the logo and company name
+        // actually displayed by FlowTracker's own branding settings. Supplier
+        // records can belong to another workspace without owning its branding.
+        $branding = app(\App\Services\BrandingService::class)->current();
         $response = $this->portal->post('suppliers', [
+            'brand_name' => (string) ($branding['name'] ?: 'FlowTrack'),
+            'brand_logo_path' => $branding['logo_url'] ?: null,
             'supplier_id' => $id,
             'catalog_revision' => (int) now()->format('Uu'),
             'reference' => 'FLOWTRACK-'.$id,
@@ -81,6 +87,11 @@ final class SyncSupplier
                     'active' => $product->status === 'active',
                     'supplier_prices' => $rows,
                     'price_version' => $pricing->version($rows),
+                    // Only a stable fingerprint, never the protected source path or bytes.
+                    'image_version' => ($path = trim((string) data_get($product->metadata, 'product_image_path'))) !== ''
+                        && preg_match('/\.(png|jpe?g|webp)$/i', $path) ? hash('sha256', $path) : null,
+                    'image_extension' => preg_match('/\.(png|jpe?g|webp)$/i', $path, $extension)
+                        ? strtolower($extension[1]) : null,
                 ];
             })->all(),
             'decisions' => $decisions,

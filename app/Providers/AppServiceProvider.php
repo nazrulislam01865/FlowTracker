@@ -99,6 +99,8 @@ class AppServiceProvider extends ServiceProvider
             $modelClass::observe(WorkspaceDataObserver::class);
         }
 
+        \App\Models\Workspace::observe(\App\Observers\SupplierWorkspaceBrandObserver::class);
+
         // Supplier sync only reacts to writes, after commit. Existing page reads
         // and master-data screens do not perform any extra catalogue queries.
         foreach ([MasterRecord::class, FlowJob::class, \App\Models\FlowJobItem::class,

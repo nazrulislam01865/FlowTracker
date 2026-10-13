@@ -58,7 +58,10 @@ final class SupplierWorkflowProjection
         // confirmed, the supplier must record a client decision, not upload to
         // ERP again. A pending sample decision belongs to the sample task.
         return match ($status) {
-            'ready' => ['erp_uploaded'],
+            // Older/imported orders sometimes leave the first uncompleted
+            // required task at Not Started. It is actionable ONLY if taskMode
+            // separately confirms it is the first eligible task in this phase.
+            'ready', 'not started', 'not start' => ['erp_uploaded'],
             'waiting for client', 'client approval' => ['confirm', 'sample', 'revise'],
             default => [],
         };
@@ -81,19 +84,20 @@ final class SupplierWorkflowProjection
         $key = OrderTaskRequirement::automationKey($task);
         $waitingForClientDecision = $key === 'ART_CLIENT_ERP_DECISION'
             && in_array($status, ['waiting for client', 'client approval'], true);
+        $unstartedFirstTask = in_array($status, ['not started', 'not start'], true);
 
         // After the client opts for a sample, the client-decision task stays
         // incomplete only as a stage blocker. Its own action must not reopen;
         // the conditional Sample Approval task is responsible for the next step.
         if ($key === 'ART_CLIENT_ERP_DECISION'
             && ! OrderDetailPresenter::isCompletedTask($task)
-            && ! in_array($status, ['ready', 'waiting for client', 'client approval'], true)) {
+            && ! in_array($status, ['ready', 'not started', 'not start', 'waiting for client', 'client approval'], true)) {
             return 'locked';
         }
 
         if ($mode !== 'locked'
             || (int) $task->workflow_phase_id !== (int) $order->workflow_phase_id
-            || ($status !== 'ready' && ! $waitingForClientDecision)
+            || ($status !== 'ready' && ! $unstartedFirstTask && ! $waitingForClientDecision)
             || ! $task->task_pack_task_id
             || ! OrderTaskRequirement::isRequired($task)
             || in_array(strtolower((string) $order->status), ['draft', 'cancelled', 'completed'], true)

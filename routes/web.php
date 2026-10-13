@@ -48,6 +48,15 @@ use App\Services\JobService;
 use Illuminate\Support\Facades\Route;
 
 
+// Binary product assets are restricted to the signed, supplier-scoped bridge.
+Route::get('/api/supplier-bridge/product-image/{supplier}/{product}', \App\Http\Controllers\SupplierBridge\SupplierProductImage::class)
+    ->whereNumber('supplier')->whereNumber('product')->middleware('throttle:120,1');
+
+Route::get('/branding-assets/{type}/{filename}/workspace/{workspace}', BrandingAssetController::class)
+    ->where('type', 'logo|favicon')
+    ->where('filename', '[A-Za-z0-9_-]+\.(?:jpg|jpeg|png|webp|ico)')
+    ->whereNumber('workspace')
+    ->name('branding-assets.workspace');
 Route::get('/branding-assets/{type}/{filename}', BrandingAssetController::class)
     ->where('type', 'logo|favicon')
     ->where('filename', '[A-Za-z0-9_-]+\.(?:jpg|jpeg|png|webp|ico)')

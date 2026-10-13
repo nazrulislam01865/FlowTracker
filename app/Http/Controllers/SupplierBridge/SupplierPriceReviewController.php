@@ -99,13 +99,7 @@ final class SupplierPriceReviewController extends Controller
                 ]);
             app(\App\Services\SupplierBridge\MarkCatalogDirty::class)->supplierIds($workspaceId, [$supplier]);
         });
-        try {
-            app(\App\Services\SupplierBridge\SendCatalogImmediately::class)->send($supplier);
-            return back()->with('success', 'Supplier price saved and synchronized with the portal.');
-        } catch (\Throwable $exception) {
-            report($exception);
-            return back()->with('warning', 'Price saved. Portal temporarily unavailable; automatic delivery remains queued.');
-        }
+        return back()->with('success', 'Supplier price saved. Secure portal delivery has been queued.');
     }
 
     public function review(Request $request, int $proposal, SupplierPricing $pricing): RedirectResponse
@@ -148,19 +142,13 @@ final class SupplierPriceReviewController extends Controller
             );
             return ['supplier_id' => (int) $pending->supplier_id, 'status' => $decision];
         });
-        // Never make a remote HTTP call inside the approval transaction.
-        try {
-            app(\App\Services\SupplierBridge\SendCatalogImmediately::class)->send($result['supplier_id']);
-            $message = match ($result['status']) {
-                'approved' => 'Supplier prices approved and synchronized with the portal.',
-                'rejected' => 'Price request rejected. The supplier portal has been notified.',
-                default => 'Request is stale because its original prices or assignment changed. The supplier portal has been notified.',
-            };
-            return back()->with('success', $message);
-        } catch (\Throwable $exception) {
-            report($exception);
-            // The outbox stays intact; a scheduler retry cannot lose the decision.
-            return back()->with('warning', 'Decision saved in FlowTracker. Supplier portal delivery is pending and will retry automatically.');
-        }
+        // MarkCatalogDirty persisted the request and queued an after-commit delivery.
+        // Never wait on supplier network availability in the administrator's browser.
+        $message = match ($result['status']) {
+            'approved' => 'Supplier prices approved. The supplier portal will update shortly.',
+            'rejected' => 'Price request rejected. Supplier notification is queued.',
+            default => 'Request is stale. Supplier notification is queued.',
+        };
+        return back()->with('success', $message);
     }
 }

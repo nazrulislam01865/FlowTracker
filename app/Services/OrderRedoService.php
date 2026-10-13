@@ -217,7 +217,8 @@ class OrderRedoService
         string $supplierAdjustmentType,
         float $supplierAdjustmentValue,
         bool $deductFreight,
-        float $freightAmount,
+        float $supplierFreightAmount,
+        float $courierFreightAmount = 0.0,
     ): array {
         $redoQuantity = max(1, min(max(1, (int) $order->quantity), $redoQuantity));
         $unitValue = $this->averageUnitValue($order);
@@ -244,7 +245,9 @@ class OrderRedoService
         $supplierCharge = $supplierAdjustmentType === 'pcs'
             ? round(min($redoQuantity, max(0, (int) $supplierAdjustmentValue)) * $unitValue, 2)
             : round($affectedValue * min(100, max(0, $supplierAdjustmentValue)) / 100, 2);
-        $freight = $deductFreight ? round(max(0, $freightAmount), 2) : 0.0;
+        $supplierFreight = $deductFreight ? round(max(0, $supplierFreightAmount), 2) : 0.0;
+        $courierFreight = $deductFreight ? round(max(0, $courierFreightAmount), 2) : 0.0;
+        $freight = round($supplierFreight + $courierFreight, 2);
 
         return [
             'quantity' => $redoQuantity,
@@ -255,7 +258,9 @@ class OrderRedoService
             'adjustedOrderValue' => round(max(0, $orderValue - $customerImpact), 2),
             'supplierCharge' => $supplierCharge,
             'freight' => $freight,
-            'recovery' => round($supplierCharge + $freight, 2),
+            'supplierFreight' => $supplierFreight,
+            'recovery' => round($supplierCharge + $supplierFreight, 2),
+            'courierRecovery' => $courierFreight,
         ];
     }
 
@@ -334,6 +339,12 @@ class OrderRedoService
                 ?? $data['supplier_redo_charge_percent']
                 ?? 0);
 
+            // Older callers may still send one amount with a freight bearer.
+            $legacyFreight = (float) ($data['freight_amount'] ?? 0);
+            $legacyCourier = ($data['freight_bearer'] ?? 'supplier') === 'courier';
+            $supplierFreightAmount = (float) ($data['supplier_freight_amount'] ?? ($legacyCourier ? 0 : $legacyFreight));
+            $courierFreightAmount = (float) ($data['courier_freight_amount'] ?? ($legacyCourier ? $legacyFreight : 0));
+
             $preview = $this->financialPreview(
                 $root,
                 $redoQuantity,
@@ -343,8 +354,15 @@ class OrderRedoService
                 $supplierAdjustmentType,
                 $supplierAdjustmentValue,
                 (bool) ($data['deduct_freight'] ?? false),
-                (float) ($data['freight_amount'] ?? 0),
+                $supplierFreightAmount,
+                $courierFreightAmount,
             );
+
+            // Preserve the legacy bearer column for existing reporting.
+            // Both new inputs may be used together, independently.
+            $data['freight_bearer'] = $preview['supplierFreight'] > 0 && $preview['courierRecovery'] > 0
+                ? 'both'
+                : ($preview['courierRecovery'] > 0 ? 'courier' : 'supplier');
 
             if ($scope === 'discount') {
                 return $this->createDiscountAdjustment(
@@ -468,7 +486,9 @@ class OrderRedoService
                 'supplier_adjustment_value' => $supplierAdjustmentValue,
                 'supplier_redo_charge_percent' => $supplierAdjustmentType === 'percent' ? $supplierAdjustmentValue : 0,
                 'deduct_freight' => (bool) ($data['deduct_freight'] ?? false),
+                'freight_bearer' => $data['freight_bearer'],
                 'freight_amount' => $preview['freight'],
+                'courier_freight_amount' => $preview['courierRecovery'],
                 'affected_order_value' => $preview['affectedValue'],
                 'order_value_before_adjustment' => $preview['orderValue'],
                 'order_value_after_adjustment' => $preview['adjustedOrderValue'],
@@ -582,7 +602,9 @@ class OrderRedoService
             'supplier_adjustment_value' => $supplierAdjustmentValue,
             'supplier_redo_charge_percent' => $supplierAdjustmentType === 'percent' ? $supplierAdjustmentValue : 0,
             'deduct_freight' => (bool) ($data['deduct_freight'] ?? false),
+            'freight_bearer' => $data['freight_bearer'],
             'freight_amount' => $preview['freight'],
+            'courier_freight_amount' => $preview['courierRecovery'],
             'affected_order_value' => $preview['affectedValue'],
             'order_value_before_adjustment' => $preview['orderValue'],
             'order_value_after_adjustment' => $preview['adjustedOrderValue'],
@@ -706,7 +728,18 @@ class OrderRedoService
             }
         }
 
-        if ((float) ($data['freight_amount'] ?? 0) < 0) {
+        if (isset($data['freight_bearer']) && ! in_array((string) $data['freight_bearer'], ['supplier', 'courier'], true)) {
+            $errors['redoFreightBearer'] = 'Choose supplier or courier company for the freight charge.';
+        }
+        foreach ([
+            'supplier_freight_amount' => 'redoSupplierFreightAmount',
+            'courier_freight_amount' => 'redoCourierFreightAmount',
+        ] as $field => $errorKey) {
+            if (isset($data[$field]) && (! is_numeric($data[$field]) || (float) $data[$field] < 0 || (float) $data[$field] > 999999999.99)) {
+                $errors[$errorKey] = 'Freight amount must be between 0 and 999,999,999.99.';
+            }
+        }
+        if (isset($data['freight_amount']) && (! is_numeric($data['freight_amount']) || (float) $data['freight_amount'] < 0)) {
             $errors['redoFreightAmount'] = 'Freight amount cannot be negative.';
         }
 

@@ -99,6 +99,23 @@ class ReverbChannelService
             'flowtrack.supplier.catalog.updated', ['changed' => true]);
     }
 
+    /** One supplier-scoped change hint, never includes buyer or customer data. */
+    public function triggerSupplierDashboard(int $supplierId): void
+    {
+        if ($supplierId < 1) return;
+        $this->triggerChannels(['private-flowtrack.supplier.'.$supplierId.'.dashboard'],
+            'flowtrack.supplier.dashboard.updated', ['changed' => true]);
+    }
+
+    public function authenticateSupplierDashboard(string $socketId, string $channelName, int $supplierId): array
+    {
+        abort_unless($this->enabled(), 503);
+        $expected = 'private-flowtrack.supplier.'.$supplierId.'.dashboard';
+        abort_unless($supplierId > 0 && hash_equals($expected, $channelName), 403);
+        abort_unless(preg_match('/^\d+\.\d+$/', $socketId), 422);
+        return ['auth' => $this->key().':'.hash_hmac('sha256', $socketId.':'.$expected, $this->secret())];
+    }
+
     private function triggerChannels(array $channels, string $event, array $payload): void
     {
         if (! $this->enabled() || Cache::get($this->circuitKey())) {

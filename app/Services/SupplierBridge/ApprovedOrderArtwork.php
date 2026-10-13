@@ -22,9 +22,11 @@ final class ApprovedOrderArtwork
         $sampleStatus = strtolower(trim((string) ($sample?->status ?? '')));
         $sampleSatisfied = ! $sample || $this->done($sample)
             || in_array($sampleStatus, ['skipped', 'not applicable', 'n/a'], true);
-        $sampleAwaitingDecision = $sample && ! $sampleSatisfied
-            && ! in_array($sampleStatus, ['', 'not started', 'not start', 'not ready', 'locked'], true);
         $clientWaitingForSample = strcasecmp(trim((string) ($client?->status ?? '')), 'Waiting for Sample Approval') === 0;
+        // A pre-created optional Sample Approval row can be Ready without the
+        // client ever requesting a sample. Only the actual branch transition
+        // must block release of the internally confirmed artwork.
+        $sampleAwaitingDecision = $clientWaitingForSample && $sample && ! $sampleSatisfied;
         // Artwork confirmed by the internal reviewer and sent to the order
         // team is the version the supplier may use. Client ERP / Approval is
         // a separate, later stage task; it must not hide internally confirmed

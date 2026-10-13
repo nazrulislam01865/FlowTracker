@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\DB;
 final class OrderReminderEventCatalog
 {
     public const ARTWORK_EVENT = 'order_task:ART_INTERNAL_REVIEW:confirm';
+    public const PORTAL_ACCESS_EVENT = 'supplier_portal:access_updated';
 
     public static function eventFor(string $automationKey): string
     {
@@ -48,6 +49,12 @@ final class OrderReminderEventCatalog
             'key' => self::ARTWORK_EVENT, 'module' => 'Order',
             'workflow' => 'FlowTrack Order Workflow', 'stage' => 'Artwork',
             'task' => 'Internal Artwork Review', 'action' => 'Confirm',
+        ];
+        $options[self::PORTAL_ACCESS_EVENT] = [
+            'key' => self::PORTAL_ACCESS_EVENT, 'module' => 'Supplier',
+            'workflow' => 'Supplier Portal', 'stage' => 'Portal Access',
+            'task' => 'Dashboard account created or credentials changed',
+            'action' => 'Successful account save',
         ];
         return array_values($options);
     }

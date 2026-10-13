@@ -27,7 +27,8 @@ trait ManagesOrderRedo
     public string $redoSupplierAdjustmentType = 'percent';
     public string $redoSupplierChargePercent = '40';
     public bool $redoDeductFreight = true;
-    public string $redoFreightAmount = '320.00';
+    public string $redoSupplierFreightAmount = '';
+    public string $redoCourierFreightAmount = '';
     /** @var array<int,array{id:int,label:string}> */
     public array $redoSupplierOptions = [];
     /** @var array<int,string> */
@@ -54,7 +55,8 @@ trait ManagesOrderRedo
         $this->redoSupplierAdjustmentType = 'percent';
         $this->redoSupplierChargePercent = '40';
         $this->redoDeductFreight = true;
-        $this->redoFreightAmount = '320.00';
+        $this->redoSupplierFreightAmount = '';
+        $this->redoCourierFreightAmount = '';
         $this->redoSupplierOptions = app(OrderRedoService::class)->supplierOptions($job);
         $this->redoSupplierId = $this->redoSupplierOptions[0]['id'] ?? null;
         $this->redoEvidence = app(OrderRedoService::class)->evidenceLabels($job);
@@ -63,7 +65,7 @@ trait ManagesOrderRedo
             'redoIssueSource', 'redoIssueCategory', 'redoAffectedQuantity', 'redoIssueDescription',
             'redoScope', 'redoQuantity', 'redoSupplierId', 'redoInstructions',
             'redoCustomerResolution', 'redoCustomerAdjustmentType', 'redoCustomerDiscount',
-            'redoSupplierAdjustmentType', 'redoSupplierChargePercent', 'redoFreightAmount',
+            'redoSupplierAdjustmentType', 'redoSupplierChargePercent', 'redoSupplierFreightAmount', 'redoCourierFreightAmount',
         ]);
     }
 
@@ -75,7 +77,7 @@ trait ManagesOrderRedo
             'redoIssueSource', 'redoIssueCategory', 'redoAffectedQuantity', 'redoIssueDescription',
             'redoScope', 'redoQuantity', 'redoSupplierId', 'redoInstructions',
             'redoCustomerResolution', 'redoCustomerAdjustmentType', 'redoCustomerDiscount',
-            'redoSupplierAdjustmentType', 'redoSupplierChargePercent', 'redoFreightAmount',
+            'redoSupplierAdjustmentType', 'redoSupplierChargePercent', 'redoSupplierFreightAmount', 'redoCourierFreightAmount',
         ]);
     }
 
@@ -125,20 +127,23 @@ trait ManagesOrderRedo
             $this->redoSupplierAdjustmentType = 'percent';
             $this->redoSupplierChargePercent = '0';
             $this->redoDeductFreight = false;
-            $this->redoFreightAmount = '0.00';
+            $this->redoSupplierFreightAmount = '';
+            $this->redoCourierFreightAmount = '';
             return;
         }
 
         // Restore operational defaults after leaving the no-redo adjustment path.
         if ((float) $this->redoSupplierChargePercent === 0.0
             && !$this->redoDeductFreight
-            && (float) $this->redoFreightAmount === 0.0
+            && (float) $this->redoSupplierFreightAmount === 0.0
+            && (float) $this->redoCourierFreightAmount === 0.0
             && $this->redoCustomerResolution === 'discount') {
             $this->redoCustomerResolution = 'free';
             $this->redoSupplierAdjustmentType = 'percent';
             $this->redoSupplierChargePercent = '40';
             $this->redoDeductFreight = true;
-            $this->redoFreightAmount = '320.00';
+            $this->redoSupplierFreightAmount = '';
+            $this->redoCourierFreightAmount = '';
             $this->redoSupplierId = $this->redoSupplierOptions[0]['id'] ?? null;
         }
     }
@@ -205,7 +210,8 @@ trait ManagesOrderRedo
                 ? (float) $this->redoSupplierChargePercent
                 : 0,
             'deduct_freight' => $this->redoDeductFreight,
-            'freight_amount' => (float) $this->redoFreightAmount,
+            'supplier_freight_amount' => (float) ($this->redoSupplierFreightAmount ?: 0),
+            'courier_freight_amount' => (float) ($this->redoCourierFreightAmount ?: 0),
         ], auth()->user());
 
         $redoOrderId = (int) ($record->redo_order_id ?? 0);
@@ -321,14 +327,16 @@ trait ManagesOrderRedo
             'redoSupplierAdjustmentType' => ['required', Rule::in(['percent', 'pcs'])],
             'redoSupplierChargePercent' => $supplierValueRules,
             'redoDeductFreight' => ['boolean'],
-            'redoFreightAmount' => ['required', 'numeric', 'min:0', 'max:999999999.99'],
+            'redoSupplierFreightAmount' => ['nullable', 'numeric', 'min:0', 'max:999999999.99'],
+            'redoCourierFreightAmount' => ['nullable', 'numeric', 'min:0', 'max:999999999.99'],
         ], [], [
             'redoCustomerResolution' => 'customer resolution',
             'redoCustomerAdjustmentType' => 'customer unit',
             'redoCustomerDiscount' => 'customer value',
             'redoSupplierAdjustmentType' => 'supplier unit',
             'redoSupplierChargePercent' => 'supplier value',
-            'redoFreightAmount' => 'freight amount',
+            'redoSupplierFreightAmount' => 'supplier freight amount',
+            'redoCourierFreightAmount' => 'courier freight amount',
         ]);
     }
 
@@ -359,7 +367,8 @@ trait ManagesOrderRedo
                 $this->redoSupplierAdjustmentType,
                 (float) $this->redoSupplierChargePercent,
                 $this->redoDeductFreight,
-                (float) $this->redoFreightAmount,
+                (float) ($this->redoSupplierFreightAmount ?: 0),
+                (float) ($this->redoCourierFreightAmount ?: 0),
             )
             : [
                 'quantity' => 0,
@@ -370,7 +379,9 @@ trait ManagesOrderRedo
                 'adjustedOrderValue' => 0.0,
                 'supplierCharge' => 0.0,
                 'freight' => 0.0,
+                'supplierFreight' => 0.0,
                 'recovery' => 0.0,
+                'courierRecovery' => 0.0,
             ];
 
         return [
@@ -390,7 +401,8 @@ trait ManagesOrderRedo
             'supplierAdjustmentType' => $this->redoSupplierAdjustmentType,
             'supplierChargePercent' => $this->redoSupplierChargePercent,
             'deductFreight' => $this->redoDeductFreight,
-            'freightAmount' => $this->redoFreightAmount,
+            'supplierFreightAmount' => $this->redoSupplierFreightAmount,
+            'courierFreightAmount' => $this->redoCourierFreightAmount,
             'supplierOptions' => $this->redoSupplierOptions,
             'evidence' => $this->redoEvidence,
             'preview' => $preview,

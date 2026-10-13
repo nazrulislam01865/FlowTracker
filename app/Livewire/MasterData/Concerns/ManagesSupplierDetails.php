@@ -176,13 +176,6 @@ trait ManagesSupplierDetails
         });
 
         app(\App\Services\SupplierBridge\MarkCatalogDirty::class)->supplierIds($workspaceId, [(int) $supplier->id]);
-        if (config('supplier_bridge.enabled')) {
-            try {
-                app(\App\Services\SupplierBridge\SendCatalogImmediately::class)->send((int) $supplier->id);
-            } catch (\Throwable $exception) {
-                session()->flash('warning', 'Supplier saved in FlowTracker. Portal sync is pending; use Sync supplier & products to retry.');
-            }
-        }
         session()->flash('success', $supplier->name.' updated successfully.');
         $this->redirectRoute('master-data', [
             'group' => 'supplier',
@@ -218,6 +211,8 @@ trait ManagesSupplierDetails
         ]);
 
         $newPassword = $values['portalPassword'] ?? '';
+        $emailChanged = strtolower(trim((string) data_get($supplier->metadata, 'portal_email'))) !== strtolower(trim($values['portalEmail']));
+        $usernameChanged = strtolower(trim((string) data_get($supplier->metadata, 'portal_username'))) !== strtolower(trim($values['portalUsername']));
         try {
             app(\App\Services\SupplierBridge\SyncSupplier::class)->provision(
                 (int) $supplier->id,
@@ -233,6 +228,19 @@ trait ManagesSupplierDetails
             $metadata['portal_email'] = strtolower(trim($values['portalEmail']));
             $metadata['portal_linked_at'] = now()->toIso8601String();
             $supplier->update(['metadata' => $metadata]);
+            if (! $linked || $emailChanged || $usernameChanged || $newPassword !== '') {
+                try {
+                    app(\App\Services\Reminders\SupplierPortalAccessReminderService::class)->queue(
+                        $supplier,
+                        $values['portalEmail'],
+                        $values['portalUsername'],
+                        ! $linked || $emailChanged || $newPassword !== '',
+                    );
+                } catch (\Throwable $notificationError) {
+                    report($notificationError);
+                    session()->flash('warning', 'Portal access was saved, but the access email could not be queued.');
+                }
+            }
             $this->portalPassword = '';
             $this->portalPasswordConfirmation = '';
             session()->flash('success', 'Supplier portal access saved. Existing password retained unless changed.');

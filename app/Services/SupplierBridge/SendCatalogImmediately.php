@@ -18,7 +18,9 @@ final class SendCatalogImmediately
             ->value('change_token');
         $this->sync->sync($supplierId);
         try {
-            app(\App\Services\ReverbChannelService::class)->triggerSupplierCatalog($supplierId);
+            $realtime = app(\App\Services\ReverbChannelService::class);
+            $realtime->triggerSupplierCatalog($supplierId);
+            $realtime->triggerSupplierDashboard($supplierId);
         } catch (\Throwable $exception) {
             // Best-effort WebSocket delivery cannot invalidate an accepted catalogue.
             report($exception);

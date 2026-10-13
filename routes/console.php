@@ -284,7 +284,13 @@ Artisan::command('flowtrack:refresh-supplier-orders {--all : Queue every previou
         $query->where('d.flow_job_id', $id);
     } elseif (! $this->option('all')) {
         $query->where(function ($q): void {
-            $q->whereColumn('j.updated_at', '>=', 'd.delivered_at')
+            // A deployed projection fix can change artwork and task actions
+            // without touching any order/task row. Refresh older accepted
+            // formats once, then use the existing event and timestamp checks.
+            $q->whereNull('d.payload->projection_version')
+                ->orWhere('d.payload->projection_version', '!=',
+                    \App\Services\SupplierBridge\SupplierOrderProjection::FORMAT_VERSION)
+                ->orWhereColumn('j.updated_at', '>=', 'd.delivered_at')
                 ->orWhereExists(fn ($sub) => $sub->selectRaw('1')->from('tasks as t')
                     ->whereColumn('t.flow_job_id', 'd.flow_job_id')->whereColumn('t.updated_at', '>=', 'd.delivered_at'))
                 ->orWhereExists(fn ($sub) => $sub->selectRaw('1')->from('documents as doc')
@@ -320,7 +326,7 @@ Artisan::command('flowtrack:refresh-supplier-orders {--all : Queue every previou
 
 // Reconcile before sending on the same minute. Stage and assignment updates
 // also enqueue immediately via the existing model observers.
-Schedule::command('flowtrack:refresh-supplier-orders')->everyMinute()->withoutOverlapping()->onOneServer();
+Schedule::command('flowtrack:refresh-supplier-orders')->everyFifteenMinutes()->withoutOverlapping()->onOneServer();
 Schedule::command('flowtrack:sync-supplier-orders')->everyMinute()->withoutOverlapping()->onOneServer();
 
 // Retry both existing and newly sent supplier RFQs without blocking inquiry email delivery.

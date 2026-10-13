@@ -125,6 +125,7 @@
                         </x-suppliers.field>
                     </div>
                     <small>Leave all three blank to create the supplier without a login. You can add portal credentials later from Edit supplier.</small>
+                    <small>When enabled under Reminder Setup, successful portal account creation sends login details to the portal email and a separate secure password-setup link. Passwords are not sent by email.</small>
                 </x-suppliers.form-card>
             @endif
 

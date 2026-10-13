@@ -27,6 +27,12 @@ final class SupplierBridgeSyncObserver implements ShouldHandleEventsAfterCommit
         if (! config('supplier_bridge.enabled')) return;
 
         if ($record instanceof MasterRecord) {
+            if ($record->type === 'supplier') {
+                if ($force || $record->wasChanged(['name', 'status', 'metadata'])) {
+                    app(MarkCatalogDirty::class)->supplierIds((int) $record->workspace_id, [(int) $record->id]);
+                }
+                return;
+            }
             if ($record->type !== 'product' || (! $force && ! $record->wasChanged(['name', 'code', 'status', 'metadata', 'deleted_at']))) return;
             $ids = DB::table('product_supplier_links')->where('workspace_id', (int) $record->workspace_id)
                 ->where('product_id', (int) $record->id)->pluck('supplier_id')->all();
@@ -50,7 +56,12 @@ final class SupplierBridgeSyncObserver implements ShouldHandleEventsAfterCommit
             // Re-resolve only this Order's Task Pack supplier defaults when its
             // product/supplier changes; the existing delivery queue handles sync.
             $order = FlowJob::query()->find($record->flow_job_id);
-            if ($order) app(\App\Services\SupplierBridge\SupplierDefaultTaskAssigner::class)->syncForOrder($order);
+            if ($order) {
+                app(\App\Services\SupplierBridge\SupplierDefaultTaskAssigner::class)->syncForOrder($order);
+                // A newly linked supplier needs its own outbox row. Updating
+                // only pre-existing rows previously left its order invisible.
+                app(\App\Services\SupplierBridge\CaptureCreatedOrder::class)->captureMany([$order]);
+            }
             $this->queueOrder((int) $record->flow_job_id);
             return;
         }

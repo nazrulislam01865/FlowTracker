@@ -206,3 +206,9 @@
 .reminder-ui #recipientUserRow .thinlabel { margin-bottom:7px; }
 .reminder-ui .recipientDescription { display:flex; align-items:flex-start; gap:9px; margin-top:12px; font-size:12px; line-height:1.5; color:var(--ft-theme-text-muted); }
 .reminder-ui .recipientNoteIcon { flex:none; color:var(--ft-theme-primary); font-weight:700; }
+
+/* Supplier portal access notification settings (Reminder Setup list only). */
+
+.reminder-ui [data-portal-token][hidden],.reminder-ui [data-order-token][hidden]{display:none!important}
+
+.reminder-ui #testArtworkRow[hidden]{display:none!important}

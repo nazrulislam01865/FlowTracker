@@ -21,7 +21,8 @@
     $redoSupplierAdjustmentType = (string) ($form['supplierAdjustmentType'] ?? 'percent');
     $redoSupplierChargePercent = (string) ($form['supplierChargePercent'] ?? '40');
     $redoDeductFreight = (bool) ($form['deductFreight'] ?? true);
-    $redoFreightAmount = (string) ($form['freightAmount'] ?? '0.00');
+    $redoSupplierFreightAmount = (string) ($form['supplierFreightAmount'] ?? '');
+    $redoCourierFreightAmount = (string) ($form['courierFreightAmount'] ?? '');
     $nextSequence = ((int) ($context['redoOrderCount'] ?? $context['redoCount'] ?? 0)) + 1;
     $nextOrderNumber = $job->displayOrderNumber().'-R'.$nextSequence;
     $isDiscountScope = $redoScope === 'discount';
@@ -37,7 +38,7 @@
             : $redoCustomerDiscount.'% customer adjustment')
         : 'Free redo';
     $recoveryLabel = $redoSupplierChargePercent.$supplierUnit.' supplier recovery'
-        .($redoDeductFreight && (float) $redoFreightAmount > 0 ? ' + '.$money($redoFreightAmount).' freight deduction' : '');
+        .(($preview['supplierFreight'] ?? 0) > 0 ? ' + '.$money($preview['supplierFreight']).' supplier freight deduction' : '');
 @endphp
 
 @if((bool) ($form['show'] ?? false))
@@ -339,17 +340,24 @@
                                 <label class="ft-redo-check">
                                     <input type="checkbox" wire:model.live="redoDeductFreight">
                                     <span>
-                                        <b>Deduct freight charge from supplier</b>
-                                        <small>Record freight as a separate supplier deduction.</small>
+                                        <b>Deduct freight charge</b>
+                                        <small>Enter either or both amounts. Blank or 0 means not applicable.</small>
                                     </span>
                                 </label>
 
                                 @if($redoDeductFreight)
-                                    <label class="ft-redo-field ft-redo-field-top">
-                                        <span>Freight amount</span>
-                                        <input type="number" min="0" step="0.01" wire:model.live.debounce.250ms="redoFreightAmount">
-                                        @error('redoFreightAmount')<small class="validation-error">{{ $message }}</small>@enderror
-                                    </label>
+                                    <div class="ft-redo-formgrid ft-redo-formgrid-spaced ft-redo-freight-fields">
+                                        <label class="ft-redo-field">
+                                            <span>Supplier freight amount (optional)</span>
+                                            <input type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00" wire:model.live.debounce.250ms="redoSupplierFreightAmount">
+                                            @error('redoSupplierFreightAmount')<small class="validation-error">{{ $message }}</small>@enderror
+                                        </label>
+                                        <label class="ft-redo-field">
+                                            <span>Courier company freight amount (optional)</span>
+                                            <input type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00" wire:model.live.debounce.250ms="redoCourierFreightAmount">
+                                            @error('redoCourierFreightAmount')<small class="validation-error">{{ $message }}</small>@enderror
+                                        </label>
+                                    </div>
                                 @endif
                             </div>
 
@@ -362,8 +370,12 @@
                                     <div class="ft-redo-calc adjusted"><span>Order total after deduction</span><b>{{ $money($preview['adjustedOrderValue'] ?? 0) }}</b></div>
                                 @endif
                                 <div class="ft-redo-calc"><span>Supplier</span><b>{{ $money($preview['supplierCharge'] ?? 0) }}</b></div>
-                                <div class="ft-redo-calc"><span>Freight deduction</span><b>{{ $money($preview['freight'] ?? 0) }}</b></div>
+                                <div class="ft-redo-calc"><span>Supplier freight deduction</span><b>{{ ($preview['supplierFreight'] ?? 0) > 0 ? $money($preview['supplierFreight']) : 'Not applicable' }}</b></div>
+                                <div class="ft-redo-calc"><span>Courier company freight deduction</span><b>{{ ($preview['courierRecovery'] ?? 0) > 0 ? $money($preview['courierRecovery']) : 'Not applicable' }}</b></div>
                                 <div class="ft-redo-calc total"><span>Total supplier recovery</span><b>{{ $money($preview['recovery'] ?? 0) }}</b></div>
+                                @if(($preview['courierRecovery'] ?? 0) > 0)
+                                    <div class="ft-redo-calc total"><span>Total courier recovery</span><b>{{ $money($preview['courierRecovery']) }}</b></div>
+                                @endif
                             </div>
                         </div>
                     </div>
@@ -386,6 +398,8 @@
                             <div class="ft-redo-confirmrow"><span>Workflow restart</span><b>{{ $scopeLabel }}</b></div>
                             <div class="ft-redo-confirmrow"><span>Customer</span><b>{{ $customerLabel }}</b></div>
                             <div class="ft-redo-confirmrow"><span>Supplier</span><b>{{ $recoveryLabel }}</b></div>
+                            <div class="ft-redo-confirmrow"><span>Supplier freight</span><b>{{ ($preview['supplierFreight'] ?? 0) > 0 ? $money($preview['supplierFreight']) : 'Not applicable' }}</b></div>
+                            <div class="ft-redo-confirmrow"><span>Courier company freight</span><b>{{ ($preview['courierRecovery'] ?? 0) > 0 ? $money($preview['courierRecovery']) : 'Not applicable' }}</b></div>
                         </div>
 
                         <div class="ft-redo-warning">

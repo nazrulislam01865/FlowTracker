@@ -142,4 +142,6 @@ class BrandingService
     {
         return 'flowtrack:branding:workspace:'.max(1, (int) config('flowtrack.workspace_id', 1));
     }
+
+
 }

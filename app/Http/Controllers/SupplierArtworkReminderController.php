@@ -51,11 +51,11 @@ final class SupplierArtworkReminderController extends Controller
     {
         $data = $request->validate([
             'event_key' => ['required', 'string', 'max:100'],
-            'subject' => ['required', 'string', 'max:100'],
+            'subject' => ['required', 'string', 'max:'.($request->input('event_key') === OrderReminderEventCatalog::PORTAL_ACCESS_EVENT ? 120 : 100)],
             'preheader' => ['nullable', 'string', 'max:150'],
             'heading' => ['required', 'string', 'max:100'],
             'cta' => ['required', 'string', 'max:50'],
-            'message' => ['required', 'string', 'max:500'],
+            'message' => ['required', 'string', 'max:'.($request->input('event_key') === OrderReminderEventCatalog::PORTAL_ACCESS_EVENT ? 2000 : 500)],
             'sections' => ['required', 'array'],
             'sections.*' => ['required', 'boolean'],
             'missing_email' => ['required', Rule::in(['skip'])],
@@ -84,6 +84,14 @@ final class SupplierArtworkReminderController extends Controller
             throw ValidationException::withMessages(['recipient_user_id' => 'Select an active FlowTracker user.']);
         }
         $data['preheader'] = $data['preheader'] ?? '';
+        if ($data['event_key'] === OrderReminderEventCatalog::PORTAL_ACCESS_EVENT) {
+            if ($data['recipient_type'] !== 'supplier') {
+                throw ValidationException::withMessages(['recipient_type' => 'Supplier portal access can only be emailed to the supplier portal login email.']);
+            }
+            $data['sections']['order_summary'] = false;
+            $data['sections']['confirmation'] = false;
+            $data['sections']['artwork'] = false;
+        }
         return $data;
     }
 
@@ -149,12 +157,14 @@ final class SupplierArtworkReminderController extends Controller
             'id' => ['required', 'integer', 'min:1'],
             'config' => ['required_if:published,false', 'array'],
         ]);
-        abort_unless($emailControl->orderEnabled(), 422, 'Order email service is disabled in System Settings.');
         $row = $reminders->settings(app(SetupContext::class)->workspaceId(), (int) $validated['id']);
         if (! $row) abort(404);
         $config = $request->boolean('published') ? json_decode((string) $row->published, true) : null;
         if ($request->boolean('published') && ! is_array($config)) abort(422, 'Publish this reminder before testing its published version.');
         $config ??= $this->validated(new Request($validated['config'] ?? []));
+        if (($config['event_key'] ?? '') !== OrderReminderEventCatalog::PORTAL_ACCESS_EVENT) {
+            abort_unless($emailControl->orderEnabled(), 422, 'Order email service is disabled in System Settings.');
+        }
         try {
             $reminders->testSend($validated['recipient'], $config);
         } catch (Throwable $exception) {
@@ -174,6 +184,10 @@ final class SupplierArtworkReminderController extends Controller
         $selectedEvent = (string) ($data['event_key'] ?? '');
         if ($selectedEvent !== '' && ! app(OrderReminderEventCatalog::class)->supports($context->workspaceId(), $selectedEvent)) {
             throw ValidationException::withMessages(['event_key' => 'Invalid workflow event filter.']);
+        }
+        // Supplier portal email delivery is audited by the central mail transport, not the order-task delivery table.
+        if ($selectedEvent === OrderReminderEventCatalog::PORTAL_ACCESS_EVENT) {
+            return response()->json(['data' => [], 'next_page_url' => null]);
         }
         $automationKey = $selectedEvent !== '' ? explode(':', $selectedEvent)[1] : null;
         $rows = DB::table('supplier_artwork_reminder_deliveries as d')

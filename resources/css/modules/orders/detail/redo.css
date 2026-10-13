@@ -412,6 +412,11 @@
     font-weight: 850;
 }
 
+/* Reserve equal label space for the two optional freight inputs. */
+.ft-order-prototype-detail .ft-redo-freight-fields .ft-redo-field > span {
+    min-height: 2lh;
+}
+
 .ft-order-prototype-detail .ft-redo-field input,
 .ft-order-prototype-detail .ft-redo-field select,
 .ft-order-prototype-detail .ft-redo-field textarea {
@@ -606,6 +611,7 @@
     .ft-order-prototype-detail .ft-redo-banner .btn { grid-column: 1 / -1; justify-self: start; }
     .ft-order-prototype-detail .ft-redo-formgrid,
     .ft-order-prototype-detail .ft-redo-choicegrid { grid-template-columns: 1fr; }
+    .ft-order-prototype-detail .ft-redo-freight-fields .ft-redo-field > span { min-height: 0; }
     .ft-order-prototype-detail .ft-redo-field.wide { grid-column: auto; }
     .ft-order-prototype-detail .ft-redo-confirmrow { grid-template-columns: 1fr; gap: 2px; }
     .ft-order-prototype-detail .ft-redo-relation { align-items: stretch; flex-direction: column; }

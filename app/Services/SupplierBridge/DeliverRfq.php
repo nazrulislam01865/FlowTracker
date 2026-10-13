@@ -118,6 +118,11 @@ final class DeliverRfq
                 'status' => 'delivered', 'delivered_at' => now(), 'last_error' => null,
                 'next_attempt_at' => null, 'locked_at' => null, 'updated_at' => now(),
             ]);
+            try {
+                app(\App\Services\ReverbChannelService::class)->triggerSupplierDashboard((int) $delivery->supplier_id);
+            } catch (\Throwable) {
+                Log::warning('Supplier dashboard realtime unavailable.', ['delivery_id' => $id]);
+            }
             return true;
         } catch (Throwable $exception) {
             $attempts = (int) $delivery->attempts + 1;

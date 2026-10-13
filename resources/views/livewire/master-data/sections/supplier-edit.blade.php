@@ -144,6 +144,7 @@
                                 @if($portalLinked)<span>Password set</span>@endif
                             </div>
                             <p>Existing passwords cannot be viewed. Send a reset link or set a new password.</p>
+                            <p>When enabled in Reminder Setup, portal account and credential changes trigger an access email. Passwords are never emailed.</p>
                         </div>
                         @if($portalLinked)
                             <button type="button" class="ft-supplier-secondary-button ft-supplier-portal-reset"

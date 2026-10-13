@@ -160,6 +160,37 @@ class OrderRedoImplementationTest extends TestCase
     }
 
 
+    public function test_optional_supplier_and_courier_freight_are_saved_and_shown_independently(): void
+    {
+        $root = dirname(__DIR__, 2);
+        $livewire = file_get_contents($root.'/app/Livewire/Jobs/Concerns/ManagesOrderRedo.php');
+        $service = file_get_contents($root.'/app/Services/OrderRedoService.php');
+        $model = file_get_contents($root.'/app/Models/OrderRedo.php');
+        $modal = file_get_contents($root.'/resources/views/components/jobs/order-detail/redo-modal.blade.php');
+        $panel = file_get_contents($root.'/resources/views/components/jobs/order-detail/redo-panel.blade.php');
+        $finance = file_get_contents($root.'/resources/views/components/jobs/order-detail/redo-finance.blade.php');
+        $migration = file_get_contents($root.'/database/migrations/2026_10_13_170000_add_courier_freight_amount_to_order_redos_table.php');
+
+        self::assertStringContainsString("default('supplier')", file_get_contents($root.'/database/migrations/2026_10_13_160100_add_freight_bearer_to_order_redos_table.php'));
+        self::assertStringContainsString("'courier_freight_amount'", $model);
+        self::assertStringContainsString("->where('freight_bearer', 'courier')", $migration);
+        self::assertStringContainsString("DB::raw('freight_amount')", $migration);
+        self::assertStringContainsString("'redoSupplierFreightAmount' => ['nullable', 'numeric'", $livewire);
+        self::assertStringContainsString("'redoCourierFreightAmount' => ['nullable', 'numeric'", $livewire);
+        self::assertStringContainsString("'supplier_freight_amount' => (float) (\$this->redoSupplierFreightAmount ?: 0)", $livewire);
+        self::assertStringContainsString("'courier_freight_amount' => (float) (\$this->redoCourierFreightAmount ?: 0)", $livewire);
+        self::assertStringContainsString("'supplierFreight' => \$supplierFreight", $service);
+        self::assertStringContainsString("'recovery' => round(\$supplierCharge + \$supplierFreight, 2)", $service);
+        self::assertSame(2, substr_count($service, "'courier_freight_amount' => \$preview['courierRecovery']"));
+        self::assertStringContainsString('wire:model.live.debounce.250ms="redoSupplierFreightAmount"', $modal);
+        self::assertStringContainsString('wire:model.live.debounce.250ms="redoCourierFreightAmount"', $modal);
+        self::assertStringNotContainsString('wire:model.live="redoFreightBearer"', $modal);
+        self::assertStringContainsString('Total courier recovery', $modal);
+        self::assertStringContainsString('Courier company freight deduction', $panel);
+        self::assertStringContainsString('Courier company freight deduction', $finance);
+        self::assertStringContainsString('Not applicable', $modal);
+    }
+
     public function test_redo_tab_reuses_standard_order_activity_section_from_prototype(): void
     {
         $root = dirname(__DIR__, 2);

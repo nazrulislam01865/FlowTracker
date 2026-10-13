@@ -66,7 +66,7 @@ class StoredAssetUrlService
         $expectedPrefix = 'branding/'.$workspaceId.'/'.$type.'/';
         if (! str_starts_with($path, $expectedPrefix) || ! $this->publicFileExists($path)) return null;
 
-        return '/branding-assets/'.$type.'/'.rawurlencode(basename($path));
+        return '/branding-assets/'.$type.'/'.rawurlencode(basename($path)).'/workspace/'.$workspaceId;
     }
 
     public function richTextImageUrl(string $filename): ?string
