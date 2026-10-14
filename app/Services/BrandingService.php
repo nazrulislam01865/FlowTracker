@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\User;
+use App\Support\SupplierPortalFooter;
 use App\Models\Workspace;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Cache;
@@ -17,11 +18,11 @@ class BrandingService
 
         return Cache::remember($this->cacheKey(), now()->addHour(), function () use ($configuredWorkspaceId) {
             $workspace = Workspace::query()
-                ->select(['id', 'name', 'logo_path', 'favicon_path'])
+                ->select(['id', 'name', 'logo_path', 'favicon_path', 'supplier_portal_footer'])
                 ->whereKey($configuredWorkspaceId)
                 ->first()
                 ?? Workspace::query()
-                    ->select(['id', 'name', 'logo_path', 'favicon_path'])
+                    ->select(['id', 'name', 'logo_path', 'favicon_path', 'supplier_portal_footer'])
                     ->where('is_active', true)
                     ->orderBy('id')
                     ->first();
@@ -33,8 +34,20 @@ class BrandingService
                 'favicon_path' => $workspace?->favicon_path,
                 'logo_url' => $this->assetUrl((int) ($workspace?->id ?: $configuredWorkspaceId), 'logo', $workspace?->logo_path),
                 'favicon_url' => $this->assetUrl((int) ($workspace?->id ?: $configuredWorkspaceId), 'favicon', $workspace?->favicon_path),
+                'supplier_portal_footer' => SupplierPortalFooter::normalize($workspace?->supplier_portal_footer),
             ];
         });
+    }
+
+    /** Dedicated admin write; observer sends an independent signed brand update to suppliers. */
+    public function saveSupplierFooter(array $footer, ?User $actor = null): void
+    {
+        $this->assertCanManage($actor ?: auth()->user());
+        $workspace = $this->workspace();
+        $normalized = SupplierPortalFooter::normalize($footer);
+        if (SupplierPortalFooter::normalize($workspace->supplier_portal_footer) === $normalized) return;
+        $workspace->update(['supplier_portal_footer' => $normalized]);
+        $this->forget();
     }
 
     public function saveLogo(UploadedFile $file, ?User $actor = null): Workspace

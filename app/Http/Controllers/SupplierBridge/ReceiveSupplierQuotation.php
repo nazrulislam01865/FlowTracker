@@ -70,7 +70,8 @@ final class ReceiveSupplierQuotation extends Controller
             }
             abort_if($locked->due_at?->isPast() || $locked->awarded_at || $locked->rejected_at,409,'RFQ is closed.');
             $source = $locked->inquiry()->with('items:id,inquiry_id,item_name,quantity,sort_order')->firstOrFail();
-            $items = $source->items;
+            $scopedIds = $locked->scopedItemIds();
+            $items = $scopedIds === [] ? $source->items : $source->items->whereIn('id', $scopedIds)->values();
             abort_if($items->isEmpty() || $items->count() > 100,422,'RFQ products are unavailable.');
             $values = $data['quotation'];
             if ($items->count() === 1) {

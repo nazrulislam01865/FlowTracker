@@ -28,6 +28,13 @@ final class InquiryRfqEmailService
         private readonly CompanyProfileService $companyProfile,
     ) {}
 
+    private function supplierItems(InquiryRfqInvitation $invitation): \Illuminate\Support\Collection
+    {
+        $items = $invitation->inquiry->items;
+        $ids = $invitation->scopedItemIds();
+        return $ids === [] ? $items : $items->whereIn('id', $ids)->values();
+    }
+
     public function sendInvitation(InquiryRfqInvitation $invitation, string $token): string
     {
         $inquiry = $invitation->relationLoaded('inquiry')
@@ -45,7 +52,7 @@ final class InquiryRfqEmailService
                 'inquiry' => $inquiry,
                 'supplier' => $invitation->supplier,
                 'contact' => $invitation->supplierContactName(),
-                'items' => $inquiry->items,
+                'items' => $this->supplierItems($invitation),
                 'due' => $invitation->due_at,
                 'requestMessage' => trim((string) ($invitation->request_message ?? '')),
                 'supplierDetails' => trim((string) ($invitation->supplier_details ?? '')),
@@ -67,7 +74,7 @@ final class InquiryRfqEmailService
                 'inquiry' => $invitation->inquiry,
                 'supplier' => $invitation->supplier,
                 'contact' => $invitation->supplierContactName(),
-                'items' => $invitation->inquiry->items,
+                'items' => $this->supplierItems($invitation),
                 'due' => $invitation->due_at,
                 'linkExpiresAt' => $invitation->link_expires_at,
                 'publicUrl' => route('rfq.public.show', ['token' => $token]),
@@ -87,7 +94,7 @@ final class InquiryRfqEmailService
                 'inquiry' => $invitation->inquiry,
                 'supplier' => $invitation->supplier,
                 'contact' => $invitation->supplierContactName(),
-                'items' => $invitation->inquiry->items,
+                'items' => $this->supplierItems($invitation),
                 'due' => $invitation->due_at,
                 'quote' => $quote,
             ],
@@ -107,7 +114,7 @@ final class InquiryRfqEmailService
                 'inquiry' => $invitation->inquiry,
                 'supplier' => $invitation->supplier,
                 'contact' => $invitation->supplierContactName(),
-                'items' => $invitation->inquiry->items,
+                'items' => $this->supplierItems($invitation),
                 'due' => $invitation->due_at,
                 'quote' => $invitation->quote,
                 'awardedBy' => $actor->name,
@@ -128,7 +135,7 @@ final class InquiryRfqEmailService
                 'inquiry' => $invitation->inquiry,
                 'supplier' => $invitation->supplier,
                 'contact' => $invitation->supplierContactName(),
-                'items' => $invitation->inquiry->items ?? collect(),
+                'items' => $this->supplierItems($invitation),
                 'due' => $invitation->due_at,
             ],
             ['type' => 'rfq_not_selected', 'reference' => $invitation->inquiry->inquiry_number, 'inquiry_id' => $invitation->inquiry_id, 'supplier_id' => $invitation->supplier_id],

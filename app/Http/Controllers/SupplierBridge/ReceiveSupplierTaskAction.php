@@ -8,6 +8,7 @@ use App\Models\Task;
 use App\Models\User;
 use App\Services\AccessControlService;
 use App\Services\OrderWorkflowActionService;
+use App\Services\WorkspaceSettingsService;
 use App\Services\DocumentService;
 use App\Services\SecureDocumentStorage;
 use App\Support\AttachmentUpload;
@@ -101,6 +102,11 @@ final class ReceiveSupplierTaskAction extends Controller
             'payload.revision_items.*.document_id' => ['required', 'integer', 'min:1'],
             'payload.revision_items.*.comment' => ['required', 'string', 'max:2000'],
         ])->validate();
+        // Supplier principals must never choose or overwrite buyer scheduling dates.
+        // This remains enforced even for an old/stale signed portal projection.
+        foreach (['estimated_delivery_date', 'supplier_delivery_date', 'shipment_date'] as $dateField) {
+            abort_if(array_key_exists($dateField, $validated['payload'] ?? []), 403);
+        }
         $supplierId = (int) $validated['supplier_id'];
         $orderId = (int) $validated['order_id'];
         $taskId = (int) $validated['task_id'];
@@ -145,7 +151,7 @@ final class ReceiveSupplierTaskAction extends Controller
             abort_unless(SupplierWorkflowProjection::taskMode($job, $task) === 'active', 409);
             $key = SupplierWorkflowProjection::actionKey(
                 OrderTaskRequirement::automationKey($task), (int) ($job->phase?->sequence ?? 0));
-            abort_unless($key !== null, 403);
+            abort_unless($key !== null && $key !== 'PROD_SET_ESTIMATED_DELIVERY', 403);
             $decision = $validated['decision'];
             // The ERP upload and the client's later decision are separate
             // canonical transitions; do not accept a shortcut across them.
@@ -197,10 +203,17 @@ final class ReceiveSupplierTaskAction extends Controller
                 }
                 $storedPaths = $documents->pluck('path')->filter()->all();
             }
+            $actionPayload = $validated['payload'] ?? [];
+            if ($key === 'SHIP_PACKAGE') {
+                // Shipment date is the verified server-side dispatch date, not
+                // a value supplied by the supplier. The planned supplier ship
+                // date stored on the order is not modified by dispatch.
+                $actionPayload['shipment_date'] = app(WorkspaceSettingsService::class)->localToday()->toDateString();
+            }
             $changed = $isDocumentTask
                 ? $this->completeUploadedTask($task, $actor)
                 : app(OrderWorkflowActionService::class)->perform(
-                    $task, $actor, $decision, $validated['comment'] ?? '', $validated['payload'] ?? [],
+                    $task, $actor, $decision, $validated['comment'] ?? '', $actionPayload,
                 );
             // Immutable audit identifying the actual supplier principal (not the FlowTracker delegate).
             $job->activities()->create([

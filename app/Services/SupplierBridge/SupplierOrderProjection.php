@@ -13,7 +13,7 @@ final class SupplierOrderProjection
 {
     // Bump when the supplier-visible projection semantics change. Legacy outbox
     // rows are reconciled once; normal writes still deliver event-first.
-    public const FORMAT_VERSION = 2;
+    public const FORMAT_VERSION = 3;
 
     private const TASKS = [
         2 => [
@@ -195,6 +195,9 @@ final class SupplierOrderProjection
             'created_at' => $order->created_at?->toIso8601String(),
             'delivery_date' => $order->supplier_delivery_date?->toDateString()
                 ?? $order->estimated_delivery_date?->toDateString(),
+            // Explicit buyer-controlled supplier ship date; never substitute the
+            // customer estimated delivery date as if it were a confirmed ship date.
+            'supplier_ship_date' => $order->supplier_delivery_date?->toDateString(),
             'status' => mb_substr((string) $order->status, 0, 80),
             'currency' => preg_match('/^[A-Z]{3}$/', strtoupper((string) $order->currency))
                 ? strtoupper((string) $order->currency) : 'USD',

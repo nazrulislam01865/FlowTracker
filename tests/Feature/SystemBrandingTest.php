@@ -77,6 +77,43 @@ class SystemBrandingTest extends TestCase
         $this->assertNull(Workspace::query()->findOrFail(1)->logo_path);
     }
 
+    public function test_super_admin_can_manage_supplier_login_footer_from_branding(): void
+    {
+        $admin = User::factory()->create(['is_super_admin' => true, 'is_active' => true]);
+
+        Livewire::actingAs($admin)->test(Index::class)
+            ->set('tab', 'branding')
+            ->set('footerCopyright', '© 2026 My Company')
+            ->set('footerLinks.privacy.url', 'https://example.com/privacy')
+            ->set('footerLinks.terms.enabled', false)
+            ->call('saveSupplierFooter')
+            ->assertHasNoErrors();
+
+        $footer = Workspace::query()->findOrFail(1)->supplier_portal_footer;
+        $this->assertSame('© 2026 My Company', $footer['copyright']);
+        $this->assertSame('https://example.com/privacy', $footer['links']['privacy']['url']);
+        $this->assertFalse($footer['links']['terms']['enabled']);
+        $this->assertSame($footer, app(BrandingService::class)->current()['supplier_portal_footer']);
+    }
+
+    public function test_footer_rejects_unsafe_urls_and_non_admin_writes(): void
+    {
+        $admin = User::factory()->create(['is_super_admin' => true, 'is_active' => true]);
+        Livewire::actingAs($admin)->test(Index::class)
+            ->set('tab', 'branding')
+            ->set('footerLinks.privacy.url', 'javascript:alert(1)')
+            ->call('saveSupplierFooter')
+            ->assertHasErrors(['footerLinks.privacy.url']);
+
+        $staff = User::factory()->create(['is_super_admin' => false, 'is_active' => true]);
+        $this->actingAs($staff);
+        $this->expectException(\Symfony\Component\HttpKernel\Exception\HttpException::class);
+        app(BrandingService::class)->saveSupplierFooter([
+            'copyright' => 'Tampered',
+            'links' => \App\Support\SupplierPortalFooter::defaults()['links'],
+        ], $staff);
+    }
+
     private function tinyPng(): string
     {
         return base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl2kwsAAAAASUVORK5CYII=');

@@ -147,7 +147,10 @@ final class SupplierWorkflowProjection
                 $mode = self::taskMode($order, $task);
                 $key = self::actionKey(OrderTaskRequirement::automationKey($task), (int) $phase->sequence);
                 $isAssigned = $assigned->has((int) $task->id);
-                $canAct = $isAssigned && $mode === 'active' && $key !== null;
+                // Scheduling dates are buyer-managed: an assigned supplier can view this
+                // task but cannot set an estimated delivery date through the portal.
+                $canAct = $isAssigned && $mode === 'active' && $key !== null
+                    && $key !== 'PROD_SET_ESTIMATED_DELIVERY';
                 $reviewArtwork = [];
                 $replaceArtwork = [];
                 if ($canAct && $artworkUpload && in_array($key, ['ART_INTERNAL_REVIEW', 'ART_CLIENT_ERP_DECISION', 'ART_PREPARE_UPLOAD'], true)) {
@@ -172,10 +175,13 @@ final class SupplierWorkflowProjection
                     'title' => mb_substr((string) $task->title, 0, 255),
                     'status' => mb_substr((string) ($task->status ?: 'Ready'), 0, 100),
                     'mode' => $mode, 'required' => OrderTaskRequirement::isRequired($task),
-                    'assignee' => $isAssigned ? 'Your company' : ($task->assignee?->name ?: 'Unassigned'),
+                    'assignee' => $key === 'PROD_SET_ESTIMATED_DELIVERY'
+                        ? 'FlowTracker team'
+                        : ($isAssigned ? 'Your company' : ($task->assignee?->name ?: 'Unassigned')),
                     'assigned_to_supplier' => $isAssigned,
                     'due_date' => $task->due_date?->format('Y-m-d'),
                     'can_act' => $canAct,
+                    'date_controlled_by_flowtracker' => $key === 'PROD_SET_ESTIMATED_DELIVERY',
                     'action_key' => $canAct ? $key : null,
                     'artwork_files' => $reviewArtwork, 'revision_sources' => $replaceArtwork,
                 ];

@@ -181,7 +181,8 @@ final class PublicRfqPortalService
     {
         $this->assertEditable($invitation);
         $inquiry = $invitation->inquiry()->with('items:id,inquiry_id,item_name,quantity,sort_order')->firstOrFail();
-        $sourceItems = $inquiry->items->keyBy('id');
+        $scopedIds = $invitation->scopedItemIds();
+        $sourceItems = ($scopedIds === [] ? $inquiry->items : $inquiry->items->whereIn('id', $scopedIds))->keyBy('id');
         $prices = collect($data['prices'] ?? [])->mapWithKeys(fn ($value, $key) => [(int) $key => (float) $value]);
         $moqs = collect($data['moqs'] ?? [])->mapWithKeys(fn ($value, $key) => [(int) $key => $value === null || $value === '' ? null : (float) $value]);
 
@@ -329,7 +330,7 @@ final class PublicRfqPortalService
     public function productImagePath(InquiryRfqInvitation $invitation, int $itemId): ?string
     {
         $item = $invitation->inquiry?->items?->firstWhere('id', $itemId);
-        if (! $item) return null;
+        if (! $item || (($scopedIds = $invitation->scopedItemIds()) !== [] && ! in_array($itemId, $scopedIds, true))) return null;
 
         $query = MasterRecord::query()
             ->forWorkspace((int) $invitation->workspace_id)
@@ -384,7 +385,10 @@ final class PublicRfqPortalService
     /** @return Collection<int,array<string,mixed>> */
     private function products(InquiryRfqInvitation $invitation, string $token): Collection
     {
-        $items = collect($invitation->inquiry?->items ?? [])->values();
+        $scopedIds = $invitation->scopedItemIds();
+        $items = collect($invitation->inquiry?->items ?? [])->when(
+            $scopedIds !== [], fn ($rows) => $rows->whereIn('id', $scopedIds),
+        )->values();
         if ($items->isEmpty()) return collect();
 
         $names = $items->pluck('item_name')->map(fn ($name) => trim((string) $name))->filter()->unique()->values();

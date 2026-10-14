@@ -416,10 +416,10 @@
             <footer class="ft-redo-modalfoot">
                 <span class="sub">Step {{ $step }} of 4</span>
                 <div class="ft-redo-modal-actions">
-                    <button type="button" class="btn" wire:click="previousRedoStep" @disabled($step === 1)>Back</button>
-                    <button type="button" class="btn primary" wire:click="nextRedoStep" wire:loading.attr="disabled" wire:target="nextRedoStep,createRedoOrder">
-                        <span wire:loading.remove wire:target="nextRedoStep,createRedoOrder">{{ $step === 4 ? ($isDiscountScope ? 'Record adjustment' : 'Create redo order') : 'Continue' }}</span>
-                        <span wire:loading wire:target="nextRedoStep,createRedoOrder">{{ $step === 4 ? ($isDiscountScope ? 'Recording...' : 'Creating...') : 'Working...' }}</span>
+                    <button type="button" class="btn" wire:click="previousRedoStep" wire:loading.attr="disabled" wire:target="nextRedoStep,previousRedoStep,createRedoOrder" @disabled($step === 1)>Back</button>
+                    <button type="button" class="btn primary" wire:click="nextRedoStep" wire:loading.attr="disabled" wire:target="nextRedoStep,previousRedoStep,createRedoOrder">
+                        <span wire:loading.remove wire:target="nextRedoStep,previousRedoStep,createRedoOrder">{{ $step === 4 ? ($isDiscountScope ? 'Record adjustment' : 'Create redo order') : 'Continue' }}</span>
+                        <span wire:loading wire:target="nextRedoStep,previousRedoStep,createRedoOrder">{{ $step === 4 ? ($isDiscountScope ? 'Recording...' : 'Creating...') : 'Working...' }}</span>
                     </button>
                 </div>
             </footer>

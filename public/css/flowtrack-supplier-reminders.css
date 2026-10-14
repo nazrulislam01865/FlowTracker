@@ -212,3 +212,8 @@
 .reminder-ui [data-portal-token][hidden],.reminder-ui [data-order-token][hidden]{display:none!important}
 
 .reminder-ui #testArtworkRow[hidden]{display:none!important}
+
+/* Stable first paint: all page-scoped styles load in the document head. */
+.reminder-ui .reminder-dynamic-metric { font-size:21px; line-height:1.25; overflow-wrap:anywhere; color:#243447; }
+.reminder-ui .metric { min-width:0; }
+.reminder-ui .summarymetrics .metric span:last-child { overflow-wrap:anywhere; }

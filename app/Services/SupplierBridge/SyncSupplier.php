@@ -70,6 +70,8 @@ final class SyncSupplier
         $response = $this->portal->post('suppliers', [
             'brand_name' => (string) ($branding['name'] ?: 'FlowTrack'),
             'brand_logo_path' => $branding['logo_url'] ?: null,
+            'brand_favicon_path' => $branding['favicon_url'] ?: null,
+            'footer' => $branding['supplier_portal_footer'],
             'supplier_id' => $id,
             'catalog_revision' => (int) now()->format('Uu'),
             'reference' => 'FLOWTRACK-'.$id,

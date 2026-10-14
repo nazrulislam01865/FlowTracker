@@ -41,6 +41,14 @@ class InquiryRfqInvitation extends Model
     public function inviter(): BelongsTo { return $this->belongsTo(User::class, 'invited_by'); }
     public function quote(): HasOne { return $this->hasOne(InquiryRfqQuote::class, 'invitation_id'); }
 
+    /** Empty scope means a legacy/global invitation; non-empty means only these products. */
+    public function scopedItemIds(): array
+    {
+        return \Illuminate\Support\Facades\DB::table('inquiry_rfq_invitation_items')
+            ->where('invitation_id', $this->id)->pluck('inquiry_item_id')
+            ->map(fn ($id): int => (int) $id)->all();
+    }
+
     public function supplierEmail(): string
     {
         return trim((string) data_get($this->supplier?->metadata, 'email'));

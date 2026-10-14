@@ -42,7 +42,7 @@ final class QueueChangedOrder
         if (config('queue.default') === 'sync') return;
         $dispatch = static function () use ($orderId): void {
             try {
-                DeliverChangedSupplierOrder::dispatch($orderId)->onQueue('supplier-sync');
+                DeliverChangedSupplierOrder::dispatch($orderId)->onQueue('supplier-critical');
             } catch (\Throwable $error) {
                 Log::warning('Immediate supplier delivery deferred to scheduler.', [
                     'order_id' => $orderId, 'error' => $error->getMessage(),

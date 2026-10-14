@@ -81,3 +81,43 @@
             </section>
         </div>
         <div class="ft-access-info ft-branding-note">Branding files are stored with the workspace and served through FlowTrack itself, so they do not depend on a <code>public/storage</code> symlink. Only Admin and Super Admin accounts can change or remove these files.</div>
+
+        <section class="card ft-branding-card ft-supplier-footer-card" data-ft-feedback-scope="form">
+            <div class="ft-branding-card-head">
+                <div>
+                    <span class="ft-branding-kicker">Supplier portal</span>
+                    <h3>Sign-in footer</h3>
+                    <p>Manage the footer on the supplier portal login page. These settings sync securely from FlowTracker; suppliers cannot edit them.</p>
+                </div>
+                <span class="ft-branding-access-badge">Admin only</span>
+            </div>
+            <div class="ft-supplier-footer-fields">
+                <label class="ft-supplier-footer-label" for="supplier-footer-copyright">Copyright text</label>
+                <input id="supplier-footer-copyright" type="text" wire:model="footerCopyright" maxlength="255" placeholder="© {{ date('Y') }} FlowTrack">
+                @error('footerCopyright')<div class="validation-error">{{ $message }}</div>@enderror
+                <div class="ft-supplier-footer-links">
+                    @foreach(['privacy'=>'Privacy','terms'=>'Terms','help'=>'Help center'] as $key=>$defaultLabel)
+                        <div class="ft-supplier-footer-link-row" wire:key="supplier-footer-{{ $key }}">
+                            <label class="ft-supplier-footer-check"><input type="checkbox" wire:model="footerLinks.{{ $key }}.enabled"> Show {{ $defaultLabel }}</label>
+                            <div>
+                                <label class="ft-supplier-footer-label" for="supplier-footer-{{ $key }}-label">Link label</label>
+                                <input id="supplier-footer-{{ $key }}-label" type="text" wire:model="footerLinks.{{ $key }}.label" maxlength="80">
+                                @error('footerLinks.'.$key.'.label')<div class="validation-error">{{ $message }}</div>@enderror
+                            </div>
+                            <div>
+                                <label class="ft-supplier-footer-label" for="supplier-footer-{{ $key }}-url">Destination URL (HTTPS or HTTP)</label>
+                                <input id="supplier-footer-{{ $key }}-url" type="url" wire:model="footerLinks.{{ $key }}.url" maxlength="2048" placeholder="https://example.com/{{ $key }}">
+                                @error('footerLinks.'.$key.'.url')<div class="validation-error">{{ $message }}</div>@enderror
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+                <div class="ft-branding-help">Leave a URL blank to show its label as plain text instead of a dead link. Uncheck a link to hide it.</div>
+                <div class="ft-branding-upload-row">
+                    <button type="button" class="primary" wire:click="saveSupplierFooter" wire:loading.attr="disabled" wire:target="saveSupplierFooter">
+                        <span wire:loading.remove wire:target="saveSupplierFooter">Save supplier footer</span>
+                        <span wire:loading wire:target="saveSupplierFooter">Saving…</span>
+                    </button>
+                </div>
+            </div>
+        </section>

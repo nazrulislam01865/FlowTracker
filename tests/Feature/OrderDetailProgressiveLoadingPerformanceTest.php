@@ -59,7 +59,7 @@ class OrderDetailProgressiveLoadingPerformanceTest extends TestCase
 
         $this->assertStringContainsString('private function findVisibleForAutoAdvance(User $actor, int $id): FlowJob', $service);
         $this->assertStringContainsString('$this->loadVisibleOverviewSummary($job, $actor);', $service);
-        $this->assertStringContainsString("\$currentPhase->loadMissing(['taskPack.items.documentCategory']);", $service);
+        $this->assertStringContainsString("\$currentPhase->load(['taskPack.items.documentCategory']);", $service);
         $this->assertStringContainsString("\$job->tasks->loadMissing(['documents', 'links']);", $service);
         $this->assertStringContainsString('$job = $this->findVisibleForAutoAdvance($actor, $job->id);', $service);
         $legacyFullGraphCall = <<<'PHP'

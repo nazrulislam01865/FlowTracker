@@ -17,6 +17,7 @@ class ProductCatalogExportService
     /** Write the selected or filtered workspace products directly to the download stream. */
     public function write(Builder $query, int $workspaceId): void
     {
+        $canViewSupplierPrices = app(\App\Services\Orders\SupplierCostVisibility::class)->allowed();
         $headers = [
             'Product code', 'Reference product code', 'Product name', 'Description',
             'Main category', 'Product category', 'Subcategory', 'Product size',
@@ -42,7 +43,7 @@ class ProductCatalogExportService
         $query->select('master_records.*')
             ->with(['parent:id,name,metadata', 'creator:id,name'])
             ->reorder()
-            ->chunkById(200, function ($products) use ($sheet, &$row, $lookup, $workspaceId, $hasLinksTable): void {
+            ->chunkById(200, function ($products) use ($sheet, &$row, $lookup, $workspaceId, $hasLinksTable, $canViewSupplierPrices): void {
                 $suppliersByProduct = $lookup->forProducts($products, $workspaceId, $hasLinksTable);
                 foreach ($products as $product) {
                     $suppliers = $suppliersByProduct->get((int) $product->id, collect());
@@ -73,7 +74,7 @@ class ProductCatalogExportService
                         $default?->name,
                         implode(', ', $product->productAvailabilityLabels()),
                         ucfirst((string) $product->status),
-                        $this->priceRows($product->supplierPriceBreakpoints()),
+                        $canViewSupplierPrices ? $this->priceRows($product->supplierPriceBreakpoints()) : 'Restricted',
                         $this->priceRows($product->customerPriceBreakpoints()),
                         $this->priceRows($product->productRemoteSurchargeBreakpoints()),
                         $options,

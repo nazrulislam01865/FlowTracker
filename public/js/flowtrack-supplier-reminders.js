@@ -156,10 +156,18 @@
     };
     const status = () => {
         const t=record(), current=t?statusOf(t):'Not configured';
-        const active=templates.find(v=>v.active);
-        if($('#recipientMetricValue'))$('#recipientMetricValue').textContent=active?recipientLabel(active.config):'Not configured';
-        const metric=$('#reminderStateMetric');if(metric)metric.textContent=active?'Published':'Inactive';
-        const hint=$('#reminderMetricHelp');if(hint)hint.textContent=active?'Active reminder'+(templates.filter(t=>t.active).length>1?'s':'')+': '+templates.filter(t=>t.active).map(t=>t.name).join(', '):'Publish a reminder to activate it';
+        const active=templates.filter(v=>v.active&&v.published);
+        const paused=templates.filter(v=>!v.active&&v.published).length;
+        const drafts=templates.length-active.length-paused;
+        const blocked=!bootstrap.orderEmailEnabled?active.filter(v=>!isPortal(v.config)).length:0;
+        const kinds=[...new Set(active.map(v=>isPortal(v.config)?'Supplier portal login':({
+            supplier:'Supplier',owner:'Order owner',coordinator:'Order coordinator',assignee:'Task assignee',
+            client:'Client',client_contact:'Client contact',user:'Selected user'
+        }[v.config?.recipient_type||'supplier']||'Other')))];
+        if($('#recipientMetricValue'))$('#recipientMetricValue').textContent=kinds.join(', ')||'None yet';
+        if($('#recipientMetricHelp'))$('#recipientMetricHelp').textContent=kinds.length+' recipient type(s) across active reminders';
+        const metric=$('#reminderStateMetric');if(metric)metric.textContent=active.length+' active';
+        const hint=$('#reminderMetricHelp');if(hint)hint.textContent=active.length+' published & active · '+paused+' paused · '+drafts+' draft'+(blocked?' · '+blocked+' order email rule(s) disabled globally':'');
         for(const selector of ['#ruleDraftBadge','#editorDraftBadge','#previewStateBadge']){
             const pill=$(selector);if(!pill)continue;
             pill.textContent=t?(t.active?'Published v'+t.version:t.published?'Paused v'+t.version:'Draft'):'Not configured';

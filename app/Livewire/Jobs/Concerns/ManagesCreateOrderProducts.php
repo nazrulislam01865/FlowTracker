@@ -5,6 +5,8 @@ namespace App\Livewire\Jobs\Concerns;
 use App\Models\MasterRecord;
 use App\Services\MasterDataService;
 use App\Services\ProductImageService;
+use App\Services\Orders\OrderProductPricing;
+use App\Services\Orders\SupplierCostVisibility;
 use Illuminate\Validation\Rule;
 use Throwable;
 
@@ -37,6 +39,27 @@ trait ManagesCreateOrderProducts
             $base = $product?->productPriceForQuantity($quantity, $clientId ?: null);
             $this->jobItems[$index]['unit_price'] = $base === null ? '' : number_format($base, 2, '.', '');
             $this->resetValidation("jobItems.$index.unit_price");
+        }
+        $this->refreshCreateOrderSupplierPrices();
+    }
+
+    /** Never hydrate confidential costs for an unauthorized Livewire user. */
+    private function refreshCreateOrderSupplierPrices(): void
+    {
+        $allowed = app(SupplierCostVisibility::class)->allowed();
+        if (! $allowed) {
+            foreach ($this->jobItems as $index => $row) unset($this->jobItems[$index]['supplier_price']);
+            return;
+        }
+        $ids = collect($this->jobItems)->pluck('product_id')->map(fn ($id) => (int) $id)->filter()->unique();
+        if ($ids->isEmpty()) return;
+        $products = MasterRecord::query()->forWorkspace(app(MasterDataService::class)->workspaceId())
+            ->ofType('product')->active()->whereIn('id', $ids)->get(['id', 'type', 'metadata', 'workspace_id'])->keyBy('id');
+        $costs = app(OrderProductPricing::class)->supplierUnitPrices($this->jobItems, $products);
+        foreach ($this->jobItems as $index => $row) {
+            $key = (int) ($row['product_id'] ?? 0).':'.(int) ($row['supplier_id'] ?? 0);
+            $price = $costs[$key] ?? null;
+            $this->jobItems[$index]['supplier_price'] = $price === null ? '' : number_format($price, 2, '.', '');
         }
     }
 
@@ -152,6 +175,7 @@ trait ManagesCreateOrderProducts
             fn (int $id): bool => $id !== $productId
         ));
         $this->resetValidation("jobItems.$index.supplier_id");
+        $this->syncCreateOrderProductBasePrice($index);
         $this->dispatch('create-order-product-supplier-selected');
 
         $label = $supplier->supplierShortCode() ?: (string) $supplier->name;
@@ -181,8 +205,11 @@ trait ManagesCreateOrderProducts
             'quantity' => $defaultQuantity,
             'supplier_id' => $supplierId,
             'unit_price' => $basePrice !== null ? number_format($basePrice, 2, '.', '') : '',
+            'remote_area_surcharge' => '',
             'notes' => '',
         ];
+        $index = array_key_last($this->jobItems);
+        $this->syncCreateOrderProductBasePrice($index);
     }
 
     /**
@@ -200,6 +227,7 @@ trait ManagesCreateOrderProducts
 
         if ($productId <= 0 || $quantity <= 0) {
             $this->jobItems[$index]['unit_price'] = '';
+            if (app(SupplierCostVisibility::class)->allowed()) $this->jobItems[$index]['supplier_price'] = '';
             $this->resetValidation("jobItems.$index.unit_price");
             return;
         }
@@ -216,6 +244,21 @@ trait ManagesCreateOrderProducts
             : '';
 
         $this->resetValidation("jobItems.$index.unit_price");
+        $this->refreshCreateOrderSupplierPrices();
+    }
+
+    public function applyCreateProductRemoteSurcharge(int $index): void
+    {
+        $this->authorizeCreateOrderProducts();
+        abort_unless(array_key_exists($index, $this->jobItems), 422);
+        $row = $this->jobItems[$index];
+        $product = MasterRecord::query()
+            ->forWorkspace(app(MasterDataService::class)->workspaceId())
+            ->ofType('product')->active()->findOrFail((int) ($row['product_id'] ?? 0));
+        $price = $product->productRemoteSurchargeForQuantity((int) ($row['quantity'] ?? 0));
+        abort_if($price === null, 422, 'No remote area surcharge is configured for this product and quantity.');
+        $this->jobItems[$index]['remote_area_surcharge'] = number_format($price, 2, '.', '');
+        $this->resetValidation("jobItems.$index.remote_area_surcharge");
     }
 
     public function incrementCreateProductQuantity(int $index): void

@@ -67,7 +67,8 @@ final class PublicInquiryRfqController extends Controller
         }
 
         if (in_array($action, ['save_pricing', 'continue_documents'], true)) {
-            $itemIds = $invitation->inquiry->items->pluck('id')->map(fn ($id) => (int) $id)->all();
+            $scopedIds = $invitation->scopedItemIds();
+            $itemIds = $scopedIds !== [] ? $scopedIds : $invitation->inquiry->items->pluck('id')->map(fn ($id) => (int) $id)->all();
             $data = $request->validate([
                 'supplier_contact_name' => ['required', 'string', 'max:160'],
                 'supplier_contact_email' => ['required', 'email', 'max:255'],

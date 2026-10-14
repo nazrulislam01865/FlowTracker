@@ -17,6 +17,8 @@
     <x-catalog.create-product-quantity
         context="order"
         :rows="$jobItems"
+        :client-id="$clientId"
+        :can-view-supplier-prices="app(\App\Services\Orders\SupplierCostVisibility::class)->allowed()"
         rows-property="jobItems"
         remove-method="removeProductRow"
         :required="true"

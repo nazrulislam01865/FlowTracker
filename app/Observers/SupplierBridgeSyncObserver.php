@@ -41,14 +41,14 @@ final class SupplierBridgeSyncObserver implements ShouldHandleEventsAfterCommit
         }
 
         if ($record instanceof Task) {
-            if (! $force && ! $record->wasChanged(['status', 'completed_at', 'deleted_at', 'assignee_id', 'due_date', 'title', 'workflow_phase_id'])) return;
+            if (! $force && ! $record->wasChanged(['status', 'progress', 'completed_at', 'deleted_at', 'assignee_id', 'due_date', 'title', 'workflow_phase_id'])) return;
             $this->queueOrder((int) $record->flow_job_id);
             return;
         }
         if ($record instanceof Document) {
             // Artwork uploads and cancellations become available only after the
             // projection's confirmation checks, even when a document changes first.
-            if (! $force && ! $record->wasChanged(['path', 'is_final', 'version', 'task_id', 'deleted_at'])) return;
+            if (! $force && ! $record->wasChanged(['path', 'name', 'size', 'is_final', 'version', 'task_id', 'deleted_at'])) return;
             $this->queueOrder((int) $record->flow_job_id);
             return;
         }
@@ -66,7 +66,8 @@ final class SupplierBridgeSyncObserver implements ShouldHandleEventsAfterCommit
             return;
         }
         if ($record instanceof FlowJob && ($force || $record->wasChanged([
-            'status', 'completed_at', 'workflow_phase_id', 'supplier_delivery_date', 'estimated_delivery_date',
+            'status', 'title', 'supplier_instruction', 'currency', 'deleted_at',
+            'completed_at', 'workflow_phase_id', 'supplier_delivery_date', 'estimated_delivery_date',
         ]))) $this->queueOrder((int) $record->id);
     }
 

@@ -34,7 +34,7 @@ trait VerifySupplierQuotation
     private function authorizeInvitation(int $id, int $supplierId): InquiryRfqInvitation
     {
         $invitation = InquiryRfqInvitation::query()->whereKey($id)->where('supplier_id',$supplierId)
-            ->where('email_status','Delivered')->whereNotNull('invited_at')->firstOrFail();
+            ->whereNotNull('invited_at')->where('email_status','!=','Draft')->firstOrFail();
         abort_if($invitation->awarded_at || $invitation->rejected_at, 409, 'RFQ is closed.');
         return $invitation;
     }

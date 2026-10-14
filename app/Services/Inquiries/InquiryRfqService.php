@@ -597,7 +597,7 @@ final class InquiryRfqService
             ->get();
     }
 
-    public function invite(Inquiry $inquiry, int $supplierId, User $actor, ?Carbon $dueAt = null, ?string $requestMessage = null, bool $sendEmail = true): InquiryRfqInvitation
+    public function invite(Inquiry $inquiry, int $supplierId, User $actor, ?Carbon $dueAt = null, ?string $requestMessage = null, bool $sendEmail = true, ?array $scopedItemIds = null): InquiryRfqInvitation
     {
         $workspaceId = (int) $inquiry->workspace_id;
         $supplier = MasterRecord::query()
@@ -609,6 +609,12 @@ final class InquiryRfqService
         $recipient = trim((string) data_get($supplier->metadata, 'email'));
         $emailReady = filter_var($recipient, FILTER_VALIDATE_EMAIL) !== false;
         $emailEnabled = $this->emailControl->inquiryEnabled();
+
+        if ($scopedItemIds !== null) {
+            $available = $inquiry->items()->pluck('id')->map(fn ($id): int => (int) $id)->all();
+            $scopedItemIds = array_values(array_unique(array_map('intval', $scopedItemIds)));
+            abort_if($scopedItemIds === [] || array_diff($scopedItemIds, $available), 422, 'RFQ supplier products are invalid.');
+        }
 
         $existing = InquiryRfqInvitation::query()
             ->where('inquiry_id', $inquiry->id)
@@ -637,9 +643,21 @@ final class InquiryRfqService
             'allow_revision' => (bool) $settings->allow_revision,
             'email_status' => ! $sendEmail ? 'Draft' : ($emailReady ? 'Sending' : 'No email'),
         ]);
+        if ($scopedItemIds !== null) {
+            \Illuminate\Support\Facades\DB::table('inquiry_rfq_invitation_items')->insert(
+                array_map(fn (int $itemId): array => [
+                    'invitation_id' => $invitation->id, 'inquiry_item_id' => $itemId,
+                ], $scopedItemIds),
+            );
+        }
         $invitation->setRelation('supplier', $supplier);
         $inquiry->loadMissing('items:id,inquiry_id,item_name,category,quantity,unit,unit_price,notes,sort_order');
         $invitation->setRelation('inquiry', $inquiry);
+
+        if ($sendEmail) {
+            // Start the secure portal delivery immediately, without waiting for the mail provider.
+            app(\App\Services\SupplierBridge\DeliverRfq::class)->queue($invitation);
+        }
 
         if (! $sendEmail) {
             $this->activity($inquiry, $actor, 'rfq.draft', $supplier->name.' was added to the RFQ as a draft invitation.', [
@@ -655,6 +673,8 @@ final class InquiryRfqService
         }
 
         if (! $emailReady || ! $emailEnabled) {
+            // An explicit send-on-create is an active supplier portal RFQ even
+            // when email has not been configured or is centrally disabled.
             $reason = ! $emailReady
                 ? 'because the supplier has no configured email address'
                 : 'because the Inquiry email service is disabled by an administrator';
@@ -671,16 +691,18 @@ final class InquiryRfqService
         try {
             $trackingId = $this->mailer->sendInvitation($invitation, $token);
         } catch (Throwable $exception) {
-            // Do not leave a dead invitation that blocks retrying the supplier.
-            // The business invitation only exists once central delivery accepts it.
-            $invitation->delete();
-            throw $exception;
+            // Email failure must not prevent a legitimate supplier-portal RFQ.
+            // Preserve the invitation for retry instead of deleting its scope.
+            $invitation->update(['email_status' => 'Failed']);
+            \Illuminate\Support\Facades\Log::warning('Supplier RFQ email failed; portal delivery still queued.', [
+                'invitation_id' => $invitation->id,
+            ]);
+            return $invitation->fresh(['supplier', 'quote']);
         }
 
         // Keep the secure invitation valid even if a later status/audit write has
         // an unexpected problem after the provider has already accepted the mail.
         $invitation->update(['email_status' => 'Delivered', 'email_tracking_id' => $trackingId]);
-        app(\App\Services\SupplierBridge\DeliverRfq::class)->queue($invitation);
 
         $this->activity($inquiry, $actor, 'rfq.invited', 'RFQ invitation sent to '.$supplier->name.'.', [
             'supplier_id' => (int) $supplier->id,
@@ -890,7 +912,8 @@ final class InquiryRfqService
         abort_if($this->linkExpired($invitation), 422, 'This quotation link has expired.');
 
         $inquiry = $invitation->inquiry()->with('items:id,inquiry_id,item_name,quantity,sort_order')->firstOrFail();
-        $sourceItems = $inquiry->items->keyBy('id');
+        $scopedIds = $invitation->scopedItemIds();
+        $sourceItems = ($scopedIds === [] ? $inquiry->items : $inquiry->items->whereIn('id', $scopedIds))->keyBy('id');
         abort_if($sourceItems->isEmpty(), 422, 'This inquiry does not contain any products to quote.');
 
         $normalized = collect($items)->map(function (array $row) use ($sourceItems): array {

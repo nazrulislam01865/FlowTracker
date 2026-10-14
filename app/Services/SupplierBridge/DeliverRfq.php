@@ -16,20 +16,31 @@ final class DeliverRfq
     public function queue(InquiryRfqInvitation $invitation): void
     {
         if (! config('supplier_bridge.enabled') || ! Schema::hasTable('supplier_rfq_deliveries')) return;
-        DB::table('supplier_rfq_deliveries')->upsert([[
-            'invitation_id' => $invitation->id,
-            'supplier_id' => $invitation->supplier_id,
+        // Do not overwrite an in-flight HTTP claim. A dirty marker requests
+        // a fresh snapshot after the current delivery finishes.
+        DB::table('supplier_rfq_deliveries')->insertOrIgnore([
+            'invitation_id' => $invitation->id, 'supplier_id' => $invitation->supplier_id,
             'status' => 'pending', 'attempts' => 0,
-            'next_attempt_at' => null, 'locked_at' => null, 'delivered_at' => null,
             'created_at' => now(), 'updated_at' => now(),
-        ]], ['invitation_id'], ['status', 'attempts', 'next_attempt_at', 'locked_at', 'delivered_at', 'updated_at']);
+        ]);
+        DB::table('supplier_rfq_deliveries')->where('invitation_id', $invitation->id)
+            ->where('status', 'sending')->update(['next_attempt_at' => now(), 'updated_at' => now()]);
+        DB::table('supplier_rfq_deliveries')->where('invitation_id', $invitation->id)
+            ->whereIn('status', ['pending', 'delivered'])->update([
+                'status' => 'pending', 'attempts' => 0, 'next_attempt_at' => null,
+                'locked_at' => null, 'delivered_at' => null, 'updated_at' => now(),
+            ]);
         $id = DB::table('supplier_rfq_deliveries')->where('invitation_id', $invitation->id)->value('id');
-        DB::afterCommit(static function () use ($id): void {
-            if (config('queue.default') !== 'sync' && $id) {
-                try { \App\Jobs\DeliverSupplierRfq::dispatch((int) $id); }
-                catch (Throwable $exception) { Log::warning('Supplier RFQ retained for scheduled retry.', ['delivery_id' => $id]); }
+        $dispatch = static function () use ($id): void {
+            if (config('queue.default') === 'sync' || ! $id) return;
+            try {
+                \App\Jobs\DeliverSupplierRfq::dispatch((int) $id)->onQueue('supplier-critical');
+            } catch (Throwable $exception) {
+                Log::warning('Supplier RFQ retained for scheduled retry.', ['delivery_id' => $id]);
             }
-        });
+        };
+        if (DB::transactionLevel() > 0) DB::afterCommit($dispatch);
+        else $dispatch();
     }
 
     public function send(int $id): bool
@@ -47,15 +58,17 @@ final class DeliverRfq
             $invitation = InquiryRfqInvitation::query()->with([
                 'inquiry:id,workspace_id,inquiry_number,subject,requirement_notes,required_delivery_date,currency,result',
                 'inquiry.items:id,inquiry_id,item_name,category,quantity,unit,notes,sort_order',
-                'inquiry.documents' => fn ($q) => $q->whereNull('inquiry_task_id')->select('id', 'inquiry_id', 'inquiry_task_id', 'name', 'size', 'mime_type'),
+                'inquiry.documents' => fn ($q) => $q->whereNull('inquiry_task_id')->select('id', 'inquiry_id', 'inquiry_task_id', 'name', 'size', 'mime_type', 'updated_at'),
             ])->findOrFail($delivery->invitation_id);
-            if ($invitation->email_status !== 'Delivered' || ! $invitation->invited_at || $invitation->inquiry?->result === 'dead') {
+            if (! $invitation->invited_at || $invitation->email_status === 'Draft' || $invitation->inquiry?->result === 'dead') {
                 throw new RuntimeException('RFQ invitation is not active for delivery.');
             }
             $inquiry = $invitation->inquiry;
             // A single bounded product lookup resolves display codes only when the
             // Inquiry name/category uniquely identifies the catalogue product.
-            $names = $inquiry->items->pluck('item_name')->filter()->unique()->all();
+            $scopedIds = $invitation->scopedItemIds();
+            $sourceItems = $scopedIds === [] ? $inquiry->items : $inquiry->items->whereIn('id', $scopedIds);
+            $names = $sourceItems->pluck('item_name')->filter()->unique()->all();
             $catalog = MasterRecord::query()->forWorkspace((int) $inquiry->workspace_id)
                 ->ofType('product')->whereIn('name', $names)
                 ->with('parent:id,name')->limit(501)->get(['id', 'parent_id', 'name', 'type', 'metadata', 'code']);
@@ -66,7 +79,7 @@ final class DeliverRfq
                     $codes[$key][] = $product->productDisplayCode();
                 }
             }
-            $items = $inquiry->items->map(static function ($item) use ($codes): array {
+            $items = $sourceItems->map(static function ($item) use ($codes): array {
                 $key = mb_strtolower(trim((string) $item->item_name)).'|'.mb_strtolower(trim((string) ($item->category ?? '')));
                 $matches = $codes[$key] ?? [];
                 return [
@@ -85,6 +98,7 @@ final class DeliverRfq
                 'name' => mb_substr(basename((string) $document->name), 0, 255),
                 'size' => (int) $document->size,
                 'mime_type' => (string) ($document->mime_type ?? 'application/octet-stream'),
+                'version' => (string) $document->updated_at?->format('Uu'),
             ])->take(100)->all();
             if ($inquiry->documents->count() > 100) throw new RuntimeException('RFQ exceeds the maximum document count.');
             $payload = [
@@ -114,10 +128,22 @@ final class DeliverRfq
                 $response = app(PortalClient::class)->post('rfqs', $payload);
             }
             if (! $response->successful()) throw new RuntimeException('Supplier RFQ API returned HTTP '.$response->status().'.');
-            DB::table('supplier_rfq_deliveries')->where('id', $id)->update([
+            $applied = DB::table('supplier_rfq_deliveries')->where('id', $id)
+                ->where('status', 'sending')->whereNull('next_attempt_at')->update([
                 'status' => 'delivered', 'delivered_at' => now(), 'last_error' => null,
                 'next_attempt_at' => null, 'locked_at' => null, 'updated_at' => now(),
             ]);
+            if ($applied !== 1) {
+                DB::table('supplier_rfq_deliveries')->where('id', $id)
+                    ->where('status', 'sending')->update([
+                        'status' => 'pending', 'attempts' => 0, 'next_attempt_at' => null,
+                        'locked_at' => null, 'updated_at' => now(),
+                    ]);
+                if (config('queue.default') !== 'sync') {
+                    \App\Jobs\DeliverSupplierRfq::dispatch((int) $id)->onQueue('supplier-critical');
+                }
+                return true;
+            }
             try {
                 app(\App\Services\ReverbChannelService::class)->triggerSupplierDashboard((int) $delivery->supplier_id);
             } catch (\Throwable) {
@@ -128,7 +154,7 @@ final class DeliverRfq
             $attempts = (int) $delivery->attempts + 1;
             DB::table('supplier_rfq_deliveries')->where('id', $id)->update([
                 'status' => 'pending', 'attempts' => $attempts, 'locked_at' => null,
-                'next_attempt_at' => now()->addSeconds(min(3600, 30 * (2 ** min($attempts, 7)))),
+                'next_attempt_at' => now()->addSeconds(min(3600, 5 * (2 ** min($attempts - 1, 9)))),
                 'last_error' => mb_substr($exception instanceof RuntimeException ? $exception->getMessage() : 'Supplier RFQ transport failed.', 0, 160),
                 'updated_at' => now(),
             ]);

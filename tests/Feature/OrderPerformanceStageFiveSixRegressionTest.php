@@ -34,7 +34,7 @@ PHP,
         $this->assertStringContainsString('$job = $this->preparedWorkflowJob;', $component);
         $this->assertStringContainsString('public function cachedPublishedPhasesForRead(int $workflowId): ?Collection', $binding);
         $this->assertStringContainsString('$cachedPublishedPhases = $binding->cachedPublishedPhasesForRead($workflowId);', $legacy);
-        $this->assertStringContainsString("\$currentPhase->loadMissing(['taskPack.items.documentCategory']);", $legacy);
+        $this->assertStringContainsString("\$currentPhase->load(['taskPack.items.documentCategory']);", $legacy);
         $this->assertStringContainsString('public function maybeAutoAdvance(FlowJob $job, User $actor): FlowJob', $legacy);
         $this->assertStringContainsString('public function handle(FlowJob $order, User $actor): FlowJob', $action);
     }

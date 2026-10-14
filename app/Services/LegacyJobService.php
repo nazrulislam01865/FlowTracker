@@ -1640,6 +1640,8 @@ class LegacyJobService
                     'category_name' => $item['category'] ?? null,
                     'quantity' => (int) ($item['quantity'] ?? 1),
                     'unit_price' => round(max(0, (float) ($item['unit_price'] ?? 0)), 2),
+                    'supplier_unit_price' => isset($item['supplier_unit_price']) ? round(max(0, (float) $item['supplier_unit_price']), 2) : null,
+                    'remote_area_surcharge' => filled($item['remote_area_surcharge'] ?? null) ? round(max(0, (float) $item['remote_area_surcharge']), 2) : null,
                     'notes' => blank($item['notes'] ?? null) ? null : trim((string) $item['notes']),
                     'updated_by' => $actor->id,
                     'sort_order' => $sort,
@@ -2498,10 +2500,17 @@ class LegacyJobService
         abort_unless(is_numeric($fallbackPrice), 422, 'Unit price must be a number.');
         $unitPrice = round(max(0, (float) ($basePrice ?? $fallbackPrice)), 2);
         abort_if($unitPrice > 999999999999.99, 422, 'Unit price is outside the allowed range.');
+        $priceSnapshot = app(\App\Services\Orders\OrderProductPricing::class)
+            ->supplierUnitPrices([[
+                'product_id' => (int) $product->id, 'supplier_id' => $supplierId,
+                'quantity' => $quantity,
+            ]], collect([(int) $product->id => $product]));
+        $supplierUnitPrice = $priceSnapshot[$product->id.':'.$supplierId] ?? null;
+
         $notes = trim((string) ($data['notes'] ?? ''));
         abort_if(mb_strlen($notes) > 2000, 422, 'Product notes may not exceed 2000 characters.');
 
-        $updated = DB::transaction(function () use ($job, $item, $actor, $product, $categoryName, $supplierId, $quantity, $unitPrice, $notes): FlowJobItem {
+        $updated = DB::transaction(function () use ($job, $item, $actor, $product, $categoryName, $supplierId, $quantity, $unitPrice, $supplierUnitPrice, $notes): FlowJobItem {
             $lockedJob = FlowJob::query()->whereKey($job->id)->lockForUpdate()->firstOrFail();
             $this->assertEditable($lockedJob, $actor);
             $lockedItem = FlowJobItem::query()
@@ -2529,6 +2538,7 @@ class LegacyJobService
                 'supplier_id' => $supplierId,
                 'quantity' => $quantity,
                 'unit_price' => $unitPrice,
+                'supplier_unit_price' => $supplierUnitPrice,
                 'notes' => $notes !== '' ? $notes : null,
                 'updated_by' => $actor->id,
             ]);
@@ -2590,6 +2600,23 @@ class LegacyJobService
         }
 
         $item->update([$field => $value, 'updated_by' => $actor->id]);
+        if (in_array($field, ['supplier_id', 'quantity'], true) && $item->catalog_product_id) {
+            $product = MasterRecord::query()->forWorkspace(app(MasterDataService::class)->workspaceId())
+                ->ofType('product')->active()->find($item->catalog_product_id);
+            $id = (int) $item->supplier_id;
+            $cost = $product && $id > 0
+                ? app(\App\Services\Orders\OrderProductPricing::class)
+                    ->supplierUnitPrices([[
+                        'product_id' => (int) $product->id, 'supplier_id' => $id,
+                        'quantity' => (int) $item->quantity,
+                    ]], collect([(int) $product->id => $product]))
+                : [];
+            $item->update(['supplier_unit_price' => $cost[$item->catalog_product_id.':'.$id] ?? null]);
+            if ($field === 'quantity' && $product) {
+                $sellingPrice = $product->productPriceForQuantity((int) $item->quantity, (int) $job->client_id);
+                if ($sellingPrice !== null) $item->update(['unit_price' => round($sellingPrice, 2)]);
+            }
+        }
 
         // Category and product are a dependent pair. A real category change
         // always clears the previous product so the user explicitly chooses a
@@ -2660,6 +2687,19 @@ class LegacyJobService
             abort_unless($supplierExists, 422, 'Select an active supplier for this product.');
         }
 
+        $supplierUnitPrice = null;
+        if ($catalogProductId && $supplierId) {
+            $catalogProduct = MasterRecord::query()->forWorkspace(app(MasterDataService::class)->workspaceId())
+                ->ofType('product')->active()->find($catalogProductId);
+            if ($catalogProduct) {
+                $costs = app(\App\Services\Orders\OrderProductPricing::class)->supplierUnitPrices([[
+                    'product_id' => (int) $catalogProductId, 'supplier_id' => (int) $supplierId,
+                    'quantity' => max(1, $quantity),
+                ]], collect([(int) $catalogProductId => $catalogProduct]));
+                $supplierUnitPrice = $costs[$catalogProductId.':'.$supplierId] ?? null;
+            }
+        }
+
         $item = FlowJobItem::create([
             'flow_job_id' => $job->id,
             'catalog_product_id' => $catalogProductId,
@@ -2668,6 +2708,7 @@ class LegacyJobService
             'product_name' => $product !== '' ? $product : null,
             'quantity' => max(1, $quantity),
             'unit_price' => max(0, $unitPrice),
+            'supplier_unit_price' => $supplierUnitPrice,
             'updated_by' => $actor->id,
             'sort_order' => ((int) $job->items()->max('sort_order')) + 1,
         ]);
@@ -2977,30 +3018,50 @@ class LegacyJobService
     }
 
     /**
-     * Load only the runtime graph required to decide whether the current Order
-     * phase may auto-advance. The previous implementation called findVisible(),
-     * which hydrates the complete Order detail graph (all workflow tasks,
-     * documents, comments/activity relationships, products, shipments, etc.)
-     * on every Order open. Auto-advance only needs the published phase metadata,
-     * current-phase Task Pack requirements, and current-phase task evidence.
+     * Only internal workflow-transition checks use this unfiltered task graph.
+     * The Order is already authorized via findVisibleBase()/findVisible(), and
+     * this relation is never returned as a user-visible task list. Restrict to
+     * the current phase and eager-load evidence to keep queries bounded.
+     */
+    private function loadCanonicalCurrentPhaseTasks(FlowJob $job): void
+    {
+        $tasks = Task::query()
+            ->where('flow_job_id', $job->id)
+            ->where('workflow_phase_id', (int) $job->workflow_phase_id)
+            ->with(['setupTemplate.documentCategory', 'template', 'documentCategory', 'documents', 'links'])
+            ->get();
+
+        $job->setRelation('tasks', $tasks);
+    }
+
+    /**
+     * Read a bounded workflow graph for the automatic phase gate. The Order
+     * stays permission-scoped, but its internal blocker evaluation must not
+     * inherit the current actor's task-list visibility rules.
      */
     private function findVisibleForAutoAdvance(User $actor, int $id): FlowJob
     {
         $job = $this->findVisibleBase($actor, $id);
         $this->loadVisibleOverviewSummary($job, $actor);
 
+        // The actor's task scope is for UI visibility, not for deciding whether
+        // an Order may advance. A supplier action is executed by its nominated
+        // FlowTracker delegate, who can see only some tasks in this phase.
+        // Re-evaluate all phase blockers against the canonical current-phase
+        // task set; never interpret hidden tasks as completed or absent.
+        $this->loadCanonicalCurrentPhaseTasks($job);
+
         $currentPhase = $job->workflow?->phases?->firstWhere('id', (int) $job->workflow_phase_id);
         if ($currentPhase?->task_pack_id) {
             // The overview summary intentionally loads only Task Pack item IDs.
             // Blocker evaluation needs the requirement flags/category metadata,
             // so upgrade only the current phase rather than every workflow phase.
-            $currentPhase->loadMissing(['taskPack.items.documentCategory']);
+            $currentPhase->load(['taskPack.items.documentCategory']);
         }
 
         if ($job->relationLoaded('tasks') && $job->tasks->isNotEmpty()) {
-            // Document/link completion gates are evaluated only for the current
-            // phase. Loading these relations on the already-scoped task collection
-            // keeps the query set bounded and prevents presenter-side lazy loads.
+            // Reuse the already eager-loaded current-phase evidence without
+            // per-task queries or any additional user-visible task hydration.
             $job->tasks->loadMissing(['documents', 'links']);
         }
 
@@ -3041,11 +3102,18 @@ class LegacyJobService
     {
         if (!$automatic) $this->assertStatusEditable($job, $actor);
         app(\App\Services\Orders\OrderHoldService::class)->assertNotHeld($job);
-        return DB::transaction(function () use ($job, $actor) {
+        return DB::transaction(function () use ($job, $actor, $automatic) {
             $this->syncWorkflowTasks($job, $actor);
             $job = $this->findVisible($actor, $job->id);
             $current = $job->phase;
             abort_unless($current, 422, 'The Job does not have a current workflow phase.');
+
+            if ($automatic) {
+                // Recheck the full set under the existing transaction before
+                // committing an automatic stage change. Never use the delegate's
+                // UI-filtered task collection to bypass a required task/file.
+                $this->loadCanonicalCurrentPhaseTasks($job);
+            }
 
             $blockers = JobDetailPresenter::blockers($job);
             if ($blockers->isNotEmpty()) {

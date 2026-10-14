@@ -24,6 +24,7 @@
     $currency = strtoupper((string) ($job->currency ?: 'USD'));
     $symbol = match ($currency) { 'USD' => '$', 'EUR' => '€', 'GBP' => '£', 'CNY', 'RMB' => '¥', default => $currency.' ' };
     $activeUnits = \App\Support\OrderDetailPresenter::totalActiveUnits($job);
+    $canSeeSupplierCosts = app(\App\Services\Orders\SupplierCostVisibility::class)->allowed();
 @endphp
 
 <x-catalog.detail-products-card
@@ -115,6 +116,19 @@
                 </td>
                 <td class="ft-order-product-price" data-label="Unit price">
                     <strong class="ft-order-product-static-value">{{ $symbol }}{{ number_format($unitPrice, 2) }}</strong>
+                    @if($item->supplier_id)
+                        <small style="display:block;color:var(--ft-muted,#708199)">
+                            Supplier:
+                            @if($canSeeSupplierCosts)
+                                {{ $item->supplier_unit_price !== null ? $symbol.number_format((float) $item->supplier_unit_price, 2) : 'Not set' }}
+                            @else
+                                •••• restricted
+                            @endif
+                        </small>
+                    @endif
+                    @if($item->remote_area_surcharge !== null && (float) $item->remote_area_surcharge > 0)
+                        <small style="display:block;color:var(--ft-muted,#708199)">Remote surcharge/unit: {{ $symbol }}{{ number_format((float) $item->remote_area_surcharge, 2) }}</small>
+                    @endif
                 </td>
                 <td class="ft-order-product-notes" data-label="Notes">
                     <span class="ft-order-product-note-value {{ filled($item->notes) ? '' : 'is-empty' }}">{{ $item->notes ?: 'Add notes' }}</span>

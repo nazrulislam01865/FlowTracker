@@ -242,6 +242,7 @@ trait ManagesProductAssetsAndOptions
             return;
         }
 
+        abort_unless(app(\App\Services\Orders\SupplierCostVisibility::class)->allowed(), 403);
         $this->resetValidation('productPriceTable');
         $parsedPriceTable = app(ProductPriceTableParser::class)->parseTable($this->productPriceTable);
         $this->productPricePreview = $parsedPriceTable['price_breakpoints'];

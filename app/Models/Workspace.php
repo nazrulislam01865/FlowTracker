@@ -16,6 +16,7 @@ class Workspace extends Model
         'favicon_path',
         'is_active',
         'company_profile',
+        'supplier_portal_footer',
     ];
 
     protected function casts(): array
@@ -23,6 +24,7 @@ class Workspace extends Model
         return [
             'is_active' => 'boolean',
             'company_profile' => 'array',
+            'supplier_portal_footer' => 'array',
         ];
     }
 

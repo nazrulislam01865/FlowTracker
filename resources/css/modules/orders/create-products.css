@@ -3248,3 +3248,80 @@
         grid-column: auto;
     }
 }
+
+/* Create Order only. Six intentional fields (no remote surcharge in this form).
+   Explicit grid areas prevent implicit tracks from pushing supplier costs past the
+   right edge, and container queries adapt to the actual form width / sidebar. */
+.ft-product-quantity-prototype-exact .ft-product-quantity-selected-row.has-extra-prices {
+    grid-template-columns: minmax(0, 1.9fr) minmax(90px, .6fr) minmax(0, 1.45fr) minmax(90px, .62fr) minmax(90px, .62fr) minmax(76px, .45fr) !important;
+    grid-template-areas: "product quantity supplier unit cost remove";
+    gap: 10px !important;
+    min-width: 0;
+    max-width: 100%;
+}
+.ft-product-quantity-prototype-exact .has-extra-prices > .ft-pq-selected-product { grid-area: product; }
+.ft-product-quantity-prototype-exact .has-extra-prices > .ft-pq-selected-quantity { grid-area: quantity; }
+.ft-product-quantity-prototype-exact .has-extra-prices > .ft-pq-selected-supplier { grid-area: supplier; }
+.ft-product-quantity-prototype-exact .has-extra-prices > .ft-pq-selected-price:not(.ft-pq-supplier-price) { grid-area: unit; }
+.ft-product-quantity-prototype-exact .has-extra-prices > .ft-pq-supplier-price { grid-area: cost; }
+.ft-product-quantity-prototype-exact .has-extra-prices > .ft-pq-remove-product { grid-area: remove; }
+.ft-product-quantity-prototype-exact .has-extra-prices > *,
+.ft-product-quantity-prototype-exact .has-extra-prices .ft-pq-supplier-picker,
+.ft-product-quantity-prototype-exact .has-extra-prices .ft-pq-price-input,
+.ft-product-quantity-prototype-exact .has-extra-prices .ft-pq-masked-price { min-width: 0; max-width: 100%; box-sizing: border-box; }
+.ft-product-quantity-prototype-exact .has-extra-prices .ft-pq-remove-product { min-width: 0; width: 100%; }
+.ft-product-quantity-prototype-exact .ft-pq-masked-price {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    min-height: 40px;
+    box-sizing: border-box;
+    padding: 0 10px;
+    border: 1px solid var(--ft-pq-line);
+    border-radius: 8px;
+    background: #f6f8fb;
+    color: #718198;
+    font-size: .75rem;
+    letter-spacing: 2px;
+    overflow: hidden;
+}
+.ft-product-quantity-prototype-exact .ft-pq-masked-price small {
+    font-size: .6rem;
+    letter-spacing: 0;
+    font-weight: 700;
+}
+
+/* Standard desktop view with navigation sidebar: keep every price in bounds. */
+@container ft-create-product-quantity (max-width: 1120px) {
+    .ft-product-quantity-prototype-exact .ft-product-quantity-selected-row.has-extra-prices {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(100px, .62fr) minmax(90px, .5fr) !important;
+        grid-template-areas:
+            "product product quantity remove"
+            "supplier supplier unit cost";
+    }
+}
+
+/* Tablet and narrow split-screen: product and supplier use full width. */
+@container ft-create-product-quantity (max-width: 700px) {
+    .ft-product-quantity-prototype-exact .ft-product-quantity-selected-row.has-extra-prices {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        grid-template-areas:
+            "product product"
+            "supplier supplier"
+            "quantity unit"
+            "cost remove";
+    }
+    .ft-product-quantity-prototype-exact .has-extra-prices > .ft-pq-remove-product {
+        align-self: end;
+        min-height: 40px;
+    }
+}
+
+/* Small phones: no squeezed price boxes or clipped labels. */
+@container ft-create-product-quantity (max-width: 390px) {
+    .ft-product-quantity-prototype-exact .ft-product-quantity-selected-row.has-extra-prices {
+        grid-template-columns: minmax(0, 1fr) !important;
+        grid-template-areas: "product" "supplier" "quantity" "unit" "cost" "remove";
+    }
+}

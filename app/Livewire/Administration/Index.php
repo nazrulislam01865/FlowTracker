@@ -33,6 +33,8 @@ class Index extends Component
 
     public $logoUpload = null;
     public $faviconUpload = null;
+    public string $footerCopyright = '';
+    public array $footerLinks = [];
 
     public bool $showRoleModal = false;
     public ?int $editingRoleId = null;
@@ -53,6 +55,7 @@ class Index extends Component
         }
 
 
+        if ($this->tab === 'branding') $this->loadSupplierFooter();
         if ($this->tab !== 'branding') {
             $this->selectedRoleId = Role::where('slug', 'operations-manager')->value('id') ?: Role::where('slug', '!=', 'super-admin')->value('id') ?: Role::value('id');
         }
@@ -62,6 +65,7 @@ class Index extends Component
     {
         $allowed = ['dashboard','roles','matrix','users','audit','security','settings','branding'];
         $this->tab = in_array($tab, $allowed, true) ? $tab : 'dashboard';
+        if ($this->tab === 'branding') $this->loadSupplierFooter();
     }
 
     // CHANGE 2026-08-24: keep user search pagination correct while typing.
@@ -283,6 +287,30 @@ class Index extends Component
     }
 
     public function toggleRule(int $id): void { app(AdminService::class)->toggleRule($id); }
+
+    private function loadSupplierFooter(): void
+    {
+        $footer = app(BrandingService::class)->current()['supplier_portal_footer'];
+        $this->footerCopyright = $footer['copyright'];
+        $this->footerLinks = $footer['links'];
+    }
+
+    public function saveSupplierFooter(): void
+    {
+        abort_unless(auth()->user()?->is_active && app(AccessControlService::class)->isAdministrator(auth()->user()), 403);
+        $this->validate([
+            'footerCopyright' => ['nullable', 'string', 'max:255'],
+            'footerLinks' => ['required', 'array:privacy,terms,help'],
+            'footerLinks.*.enabled' => ['required', 'boolean'],
+            'footerLinks.*.label' => ['required', 'string', 'max:80'],
+            'footerLinks.*.url' => ['nullable', 'string', 'max:2048', 'url:http,https'],
+        ]);
+        app(BrandingService::class)->saveSupplierFooter([
+            'copyright' => $this->footerCopyright,
+            'links' => $this->footerLinks,
+        ], auth()->user());
+        session()->flash('success', 'Supplier portal footer saved. It will synchronize via the existing branding bridge.');
+    }
 
     public function saveLogo()
     {

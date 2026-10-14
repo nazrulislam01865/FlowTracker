@@ -36,7 +36,8 @@ trait ManagesOrderRedo
 
     public function openRedoModal(): void
     {
-        abort_unless($this->selectedJobId, 422);
+        // A delayed Initiate Redo click can outlive the selected Order.
+        if (! $this->selectedJobId) return;
         $job = app(VisibleOrderQuery::class)->base(auth()->user(), (int) $this->selectedJobId);
         abort_unless(app(OrderRedoService::class)->canInitiate(auth()->user(), $job), 403);
 
@@ -150,7 +151,13 @@ trait ManagesOrderRedo
 
     public function nextRedoStep(): void
     {
-        abort_unless($this->showRedoModal && $this->selectedJobId, 422);
+        // A pending click can arrive after navigation/closing the modal.
+        // Treat it as obsolete instead of turning a harmless UI race into HTTP 422.
+        if (! $this->showRedoModal) return;
+        if (! $this->selectedJobId) {
+            $this->closeRedoModal();
+            return;
+        }
 
         if ($this->redoStep === 1) {
             $this->validateRedoIssueStep();
@@ -175,13 +182,26 @@ trait ManagesOrderRedo
 
     public function previousRedoStep(): void
     {
-        abort_unless($this->showRedoModal, 422);
+        // Back may race with closing the modal or switching to another Order.
+        if (! $this->showRedoModal) return;
+        if (! $this->selectedJobId) {
+            $this->closeRedoModal();
+            return;
+        }
+
         $this->redoStep = max(1, $this->redoStep - 1);
     }
 
     public function createRedoOrder(): void
     {
-        abort_unless($this->showRedoModal && $this->selectedJobId, 422);
+        // Ignore a stale queued submit once the modal has been dismissed.
+        // When it is open, normal validation and the service authorization
+        // checks below still run before anything can be created.
+        if (! $this->showRedoModal) return;
+        if (! $this->selectedJobId) {
+            $this->closeRedoModal();
+            return;
+        }
         $this->validateRedoIssueStep();
         $this->validateRedoScopeStep();
         $this->validateRedoCommercialStep();

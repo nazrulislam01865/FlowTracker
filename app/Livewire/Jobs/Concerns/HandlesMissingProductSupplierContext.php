@@ -123,6 +123,7 @@ trait HandlesMissingProductSupplierContext
             abort_unless(array_key_exists($index, $this->jobItems), 422, 'That product row is no longer available.');
             abort_unless((int) ($this->jobItems[$index]['product_id'] ?? 0) === $productId, 422, 'That product row is no longer available.');
             $this->jobItems[$index]['supplier_id'] = $supplierId;
+            $this->syncCreateOrderProductBasePrice($index);
             $this->resetValidation("jobItems.$index.supplier_id");
         } else {
             $alreadySelected = collect($this->jobItems)->contains(

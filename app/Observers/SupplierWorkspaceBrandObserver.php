@@ -2,7 +2,7 @@
 namespace App\Observers;
 
 use App\Models\Workspace;
-use App\Services\SupplierBridge\MarkCatalogDirty;
+use App\Services\SupplierBridge\MarkBrandDirty;
 use Illuminate\Contracts\Events\ShouldHandleEventsAfterCommit;
 use Illuminate\Support\Facades\Cache;
 
@@ -11,7 +11,7 @@ final class SupplierWorkspaceBrandObserver implements ShouldHandleEventsAfterCom
 {
     public function updated(Workspace $workspace): void
     {
-        if (! $workspace->wasChanged(['name', 'logo_path'])) return;
+        if (! $workspace->wasChanged(['name', 'logo_path', 'favicon_path', 'supplier_portal_footer'])) return;
         // The cache key is the configured workspace ID, even when branding
         // falls back to another active workspace. Invalidate that same key.
         Cache::forget('flowtrack:branding:workspace:'.max(1, (int) config('flowtrack.workspace_id', 1)));
@@ -22,10 +22,8 @@ final class SupplierWorkspaceBrandObserver implements ShouldHandleEventsAfterCom
         $brandingWorkspaceId = (int) app(\App\Services\BrandingService::class)->current()['workspace_id'];
         if ($brandingWorkspaceId !== (int) $workspace->id) return;
         \App\Models\MasterRecord::query()->ofType('supplier')
-            ->select(['id', 'workspace_id'])->chunkById(100, function ($suppliers): void {
-                foreach ($suppliers->groupBy('workspace_id') as $workspaceId => $group) {
-                    app(MarkCatalogDirty::class)->supplierIds((int) $workspaceId, $group->pluck('id')->all());
-                }
+            ->select(['id'])->chunkById(100, function ($suppliers): void {
+                app(MarkBrandDirty::class)->supplierIds($suppliers->pluck('id')->all());
             });
     }
 }

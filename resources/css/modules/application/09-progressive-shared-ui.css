@@ -2102,3 +2102,17 @@ body:has(.ft-client-preview-backdrop) {
 }
 
 
+
+/* Supplier sign-in footer editor uses the central admin branding card styles. */
+.ft-supplier-footer-card { margin-top: 16px; }
+.ft-supplier-footer-fields { display: grid; gap: 12px; }
+.ft-supplier-footer-label { display: block; margin-bottom: 5px; font-size: 13px; font-weight: 650; }
+.ft-supplier-footer-fields input[type="text"], .ft-supplier-footer-fields input[type="url"] {
+    display: block; width: 100%; max-width: 100%; min-width: 0; box-sizing: border-box;
+    border: 1px solid var(--border-color, #cbd5e1); border-radius: 8px;
+    padding: 10px 12px; background: var(--surface, #fff); color: inherit;
+}
+.ft-supplier-footer-links { display: grid; gap: 12px; }
+.ft-supplier-footer-link-row { display: grid; grid-template-columns: minmax(120px, .65fr) minmax(140px, 1fr) minmax(220px, 2fr); align-items: center; gap: 12px; }
+.ft-supplier-footer-check { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; }
+@media (max-width: 780px) { .ft-supplier-footer-link-row { grid-template-columns: minmax(0, 1fr); align-items: stretch; } }

@@ -88,9 +88,15 @@ start() {
         # Process supplier/order jobs, but do not send queued customer emails
         # as a side effect of starting a local development environment.
         ( cd "$dir" && exec "$PHP_BIN" artisan queue:work --queue=default,realtime,notifications --sleep=1 --tries=3 --timeout=120 ) >> "$logfile" 2>&1 &
+    elif [[ "$command" == 'buyer-critical-worker' ]]; then
+        ( cd "$dir" && exec "$PHP_BIN" artisan queue:work --queue=supplier-critical --sleep=1 --tries=1 --timeout=45 ) >> "$logfile" 2>&1 &
+    elif [[ "$command" == 'buyer-brand-worker' ]]; then
+        ( cd "$dir" && exec "$PHP_BIN" artisan queue:work --queue=supplier-branding --sleep=1 --tries=1 --timeout=30 ) >> "$logfile" 2>&1 &
     elif [[ "$command" == 'buyer-supplier-worker' ]]; then
         # Do not let general notifications/emails block task and order updates.
         ( cd "$dir" && exec "$PHP_BIN" artisan queue:work --queue=supplier-sync --sleep=1 --tries=1 --timeout=120 ) >> "$logfile" 2>&1 &
+    elif [[ "$command" == 'supplier-rfq-file-worker' ]]; then
+        ( cd "$dir" && exec "$PHP_BIN" artisan queue:work --queue=supplier-rfq-files --sleep=1 --tries=3 --timeout=45 ) >> "$logfile" 2>&1 &
     elif [[ "$command" == 'supplier-delivery-worker' ]]; then
         # Large quotation attachments cannot block interactive order/image refresh jobs.
         ( cd "$dir" && exec "$PHP_BIN" artisan queue:work --queue=supplier-deliveries --sleep=1 --tries=1 --timeout=900 ) >> "$logfile" 2>&1 &
@@ -107,9 +113,12 @@ fi
 start "$BUYER" 'flowtracker-scheduler' scheduler
 start "$PORTAL" 'supplier-scheduler' scheduler
 start "$BUYER" 'flowtracker-worker' worker
+start "$BUYER" 'flowtracker-supplier-critical-worker' buyer-critical-worker
+start "$BUYER" 'flowtracker-supplier-brand-worker' buyer-brand-worker
 start "$BUYER" 'flowtracker-supplier-worker' buyer-supplier-worker
 start "$PORTAL" 'supplier-worker' worker
 start "$PORTAL" 'supplier-quotation-worker' supplier-delivery-worker
+start "$PORTAL" 'supplier-rfq-file-worker' supplier-rfq-file-worker
 # Reuse an existing local Reverb service, otherwise start the configured one.
 # This check avoids a duplicate WebSocket process on port 8080.
 if "$PHP_BIN" -r '$s=@stream_socket_server("tcp://127.0.0.1:8080",$e,$m); if(!$s){exit(1);} fclose($s);' 2>/dev/null; then

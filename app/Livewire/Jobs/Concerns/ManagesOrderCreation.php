@@ -1235,6 +1235,7 @@ trait ManagesOrderCreation
             ],
             'jobItems.*.quantity' => ['required','integer','min:1','max:999999999'],
             'jobItems.*.unit_price' => ['nullable','numeric','min:0','max:999999999999.99'],
+            'jobItems.*.remote_area_surcharge' => ['nullable','numeric','min:0','max:999999999999.99'],
             'jobItems.*.notes' => ['nullable','string','max:2000'],
             // Optional PO uploaded during Create Order. It is attached to the
             // NEW_UPLOAD_PO workflow task after the Order and its tasks exist.
@@ -1384,6 +1385,17 @@ trait ManagesOrderCreation
                 : null;
         }
         if ($catalogInvalid) return;
+
+        // Resolve authoritative supplier-specific costs only into this server-side
+        // save payload, including when the creator cannot view confidential costs.
+        // No supplier cost is ever sent to an unauthorized Livewire snapshot.
+        $costs = app(\App\Services\Orders\OrderProductPricing::class)
+            ->supplierUnitPrices($data['jobItems'], $products);
+        foreach ($data['jobItems'] as $index => $row) {
+            $key = (int) $row['product_id'].':'.(int) ($row['supplier_id'] ?? 0);
+            $data['jobItems'][$index]['supplier_unit_price'] = $costs[$key] ?? null;
+            unset($data['jobItems'][$index]['supplier_price']);
+        }
 
         $job = app(CreateOrder::class)->handle(
             $data,

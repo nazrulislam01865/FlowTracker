@@ -19,6 +19,8 @@
     'step' => 2,
     'supplierRequired' => false,
     'context' => 'order',
+    'clientId' => null,
+    'canViewSupplierPrices' => false,
 ])
 
 @php
@@ -96,7 +98,7 @@
                         $supplierInitials = strtoupper(substr(implode('', array_map(fn ($word) => substr($word, 0, 1), array_filter($supplierWords))), 0, 2));
                         $supplierShortCode = trim((string) ($resultSupplier?->supplierShortCode() ?? ''));
                         $supplierLabel = $supplierShortCode !== '' ? $supplierShortCode : trim((string) ($resultSupplier?->name ?? ''));
-                        $previewPrice = $product->productPriceForQuantity(1000);
+                        $previewPrice = $product->productPriceForQuantity(1000, $clientId ? (int) $clientId : null);
                         $leadDays = (int) (data_get($product->metadata, 'lead_time_days') ?: data_get($product->metadata, 'supplier_lead_time_days') ?: 0);
                         $isPreferred = (bool) (data_get($product->metadata, 'supplier_preferred') ?: data_get($product->metadata, 'preferred_supplier'));
                         $referenceCode = $product->productReferenceCode();
@@ -121,7 +123,7 @@
                                     <span>Default</span>
                                     @if($leadDays > 0)<i>&middot;</i><span>{{ number_format($leadDays) }} days</span>@endif
                                     @if($isPreferred)<i>&middot;</i><span>Preferred</span>@endif
-                                    @if($previewPrice !== null)<i>&middot;</i><span>${{ number_format((float) $previewPrice, 2) }} last price</span>@endif
+                                    @if($previewPrice !== null)<i>&middot;</i><span>${{ number_format((float) $previewPrice, 2) }} client price</span>@endif
                                 @else
                                     <b class="ft-order-product-result-supplier-badge is-empty">—</b>
                                     <strong>No default supplier</strong>
@@ -170,6 +172,7 @@
                         :supplier-skipped="$supplierSkipped"
                         :supplier-required="$supplierRequired"
                         :context="$context"
+                        :can-view-supplier-prices="$canViewSupplierPrices"
                         :index="$index"
                         :rows-property="$rowsProperty"
                         :remove-method="$removeMethod"

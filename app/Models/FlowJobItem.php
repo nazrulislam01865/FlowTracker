@@ -23,6 +23,8 @@ class FlowJobItem extends Model
         'removed_by',
         'removal_reason',
         'unit_price',
+        'supplier_unit_price',
+        'remote_area_surcharge',
         'updated_by',
     ];
 
@@ -30,6 +32,8 @@ class FlowJobItem extends Model
     {
         return [
             'unit_price' => 'decimal:2',
+            'supplier_unit_price' => 'decimal:2',
+            'remote_area_surcharge' => 'decimal:2',
             'is_removed' => 'boolean',
             'removed_at' => 'datetime',
         ];

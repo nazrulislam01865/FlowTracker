@@ -354,6 +354,8 @@ Schedule::command('flowtrack:sync-supplier-rfqs')->everyMinute()->withoutOverlap
 
 // Coalesced, supplier-scoped changes. No periodic expensive full-catalogue scans.
 \Illuminate\Support\Facades\Schedule::command('flowtrack:sync-pending-supplier-catalog')->everyMinute()->withoutOverlapping();
+// Branding is a separate durable outbox and never forces a product/cost sync.
+\Illuminate\Support\Facades\Schedule::command('flowtrack:sync-pending-supplier-branding')->everyMinute()->withoutOverlapping();
 
 // Low-frequency safety reconciliation also catches changes performed by external imports.
 \Illuminate\Support\Facades\Schedule::command('flowtrack:sync-supplier-catalog')->dailyAt('02:30')->withoutOverlapping();

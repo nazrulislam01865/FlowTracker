@@ -130,7 +130,7 @@ final class DeliverOrder
                 if ($dirty && config('queue.default') !== 'sync') {
                     try {
                         \App\Jobs\DeliverChangedSupplierOrder::dispatch((int) $delivery->flow_job_id)
-                            ->onQueue('supplier-sync');
+                            ->onQueue('supplier-critical');
                     } catch (\Throwable $error) {
                         Log::warning('Newer supplier order delivery deferred to scheduler.', ['delivery_id' => $id]);
                     }

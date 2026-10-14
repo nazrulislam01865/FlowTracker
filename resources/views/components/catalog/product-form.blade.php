@@ -221,6 +221,7 @@
         @endif
 
         <x-catalog.product-section number="3" title="Product pricing" subtitle="Maintain supplier costs and client selling prices separately. Client prices automatically apply in orders and inquiries.">
+            @if(app(\App\Services\Orders\SupplierCostVisibility::class)->allowed())
             <div class="ft-product-supplier-price-list">
                 <div class="ft-product-price-section-header" style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin:18px 0 10px">
                     <strong>Supplier-based price tables ({{ count($supplierPriceRows) }})</strong>
@@ -255,6 +256,9 @@
                     </div>
                 @enderror
             </div>
+            @else
+                <small>Supplier prices are restricted. Customer price tables remain editable.</small>
+            @endif
             <div class="ft-product-client-price-list">
                 <div class="ft-product-price-section-header" style="margin:18px 0 10px">
                     <strong>Client price tables ({{ $clientAvailabilityMode === 'specific' ? $visibleClientPriceRows->count() : 1 }})</strong>
@@ -303,6 +307,12 @@
                 @endif
                 @error('productClientPrices')<b class="validation-error">{{ $message }}</b>@enderror
             </div>
+            <label class="ft-product-field ft-product-price-table-field" style="margin-top:18px">
+                <span>Remote area surcharge prices (optional)</span>
+                <small>Per-product, quantity-based surcharge per unit. Paste a Quantity row and a Product price row; these are separate from customer selling prices and supplier costs.</small>
+                <textarea wire:model.blur="productRemoteSurchargeTable" rows="3" spellcheck="false" placeholder="Quantity&#9;100&#9;500&#9;1000&#10;Product price&#9;0.50&#9;0.40&#9;0.30"></textarea>
+                @error('productRemoteSurchargeTable')<b class="validation-error">{{ $message }}</b>@enderror
+            </label>
         </x-catalog.product-section>
 
         <x-catalog.product-section number="4" title="Product options" subtitle="Add optional choices such as color, size or material. An option can also add an extra unit charge." class="ft-product-options-section">

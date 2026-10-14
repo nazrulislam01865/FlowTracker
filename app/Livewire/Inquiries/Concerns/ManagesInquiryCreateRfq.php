@@ -246,7 +246,7 @@ trait ManagesInquiryCreateRfq
         if ($invalid) return null;
 
         $plan = [];
-        foreach ($states as $state) {
+        foreach ($states as $rowIndex => $state) {
             foreach ($state['supplier_ids'] as $supplierId) {
                 $supplierId = (int) $supplierId;
                 if (! isset($plan[$supplierId])) {
@@ -255,9 +255,11 @@ trait ManagesInquiryCreateRfq
                         'due_date' => $state['due_date'],
                         'message' => $state['message'],
                         'send_on_create' => (bool) $state['send_on_create'],
+                        'row_indexes' => [$rowIndex],
                     ];
                     continue;
                 }
+                $plan[$supplierId]['row_indexes'][] = $rowIndex;
                 if ($state['send_on_create'] && ! $plan[$supplierId]['send_on_create']) {
                     $plan[$supplierId]['send_on_create'] = true;
                     $plan[$supplierId]['due_date'] = $state['due_date'];
@@ -273,6 +275,8 @@ trait ManagesInquiryCreateRfq
     private function sendCreateProductRfqPlan(Inquiry $inquiry, User $actor, array $plan): array
     {
         $result = ['sent' => 0, 'drafted' => 0, 'added_without_email' => 0, 'failed' => 0];
+        // Creation preserves the original product-row sequence as sort_order (zero based).
+        $itemIdsByRow = $inquiry->items()->pluck('id', 'sort_order');
         foreach ($plan as $entry) {
             try {
                 $dueAt = Carbon::createFromFormat('Y-m-d', $entry['due_date'])->endOfDay();
@@ -283,6 +287,8 @@ trait ManagesInquiryCreateRfq
                     $dueAt,
                     trim((string) $entry['message']) ?: null,
                     (bool) $entry['send_on_create'],
+                    collect($entry['row_indexes'])->map(fn ($index) => (int) $itemIdsByRow->get($index))
+                        ->filter(fn ($id) => $id > 0)->unique()->values()->all(),
                 );
                 if (! $entry['send_on_create']) $result['drafted']++;
                 elseif ($invitation->email_status === 'Delivered') $result['sent']++;

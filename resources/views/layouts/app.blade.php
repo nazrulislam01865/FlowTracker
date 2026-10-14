@@ -76,6 +76,9 @@
         @vite('resources/css/modules/clients/filters.css')
     @endif
 
+    @if(request()->routeIs('supplier-reminder.index'))
+        <link rel="stylesheet" href="{{ asset('css/flowtrack-supplier-reminders.css') }}?v=7">
+    @endif
     @livewireStyles
     {{-- Central dashboard-derived theme package. Keep after Livewire CSS so it is the final static typography/theme authority. --}}
     @vite('resources/theme/flowtrack/theme.css')

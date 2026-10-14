@@ -613,7 +613,8 @@ trait BuildsMasterDataPageData
         // Supplier-approved overrides are authoritative in the Product Details view.
         // Read them in one query, not one query per tagged supplier.
         $viewProductSupplierPricingTables = collect();
-        if ($viewProduct && ($this->productDetailSectionsReady['pricing'] ?? false) && $viewProductSuppliers->isNotEmpty()) {
+        if ($viewProduct && ($this->productDetailSectionsReady['pricing'] ?? false)
+            && app(\App\Services\Orders\SupplierCostVisibility::class)->allowed() && $viewProductSuppliers->isNotEmpty()) {
             $overrides = DB::table('supplier_product_prices')
                 ->where('workspace_id', $workspaceId)->where('product_id', $viewProduct->id)
                 ->whereIn('supplier_id', $viewProductSuppliers->pluck('id'))

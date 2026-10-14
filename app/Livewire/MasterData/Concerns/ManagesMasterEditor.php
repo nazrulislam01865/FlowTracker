@@ -24,6 +24,10 @@ trait ManagesMasterEditor
     public function syncProductSupplierPriceRows(?MasterRecord $product = null): void
     {
         if ($this->group !== 'product' || ! $this->showModal) return;
+        if (! app(\App\Services\Orders\SupplierCostVisibility::class)->allowed()) {
+            $this->productSupplierPrices = [];
+            return;
+        }
 
         $ids = collect($this->productSupplierIds)
             ->push($this->productSupplierId)
@@ -82,6 +86,7 @@ trait ManagesMasterEditor
     public function refreshProductSupplierPrices(): void
     {
         if ($this->group !== 'product' || ! $this->showModal || ! $this->editId) return;
+        abort_unless(app(\App\Services\Orders\SupplierCostVisibility::class)->allowed(), 403);
 
         $product = MasterRecord::query()
             ->forWorkspace(app(MasterDataService::class)->workspaceId())
@@ -100,6 +105,7 @@ trait ManagesMasterEditor
     public function updatedProductSupplierPrices(mixed $value, string $key): void
     {
         if ($this->group !== 'product' || ! preg_match('/^(\d+)\.table$/', $key, $match)) return;
+        abort_unless(app(\App\Services\Orders\SupplierCostVisibility::class)->allowed(), 403);
         $index = (int) $match[1];
         if (! isset($this->productSupplierPrices[$index])) return;
         $this->resetValidation('productSupplierPrices.'.$index.'.table');
@@ -220,7 +226,8 @@ trait ManagesMasterEditor
             }
             $this->productFormMainCategory = $r->productMainCategory();
             $this->productSize = $r->productSize();
-            $this->productPriceTable = trim((string) data_get($r->metadata, 'price_table_raw'));
+            $canSeeSupplierCosts = app(\App\Services\Orders\SupplierCostVisibility::class)->allowed();
+            $this->productPriceTable = $canSeeSupplierCosts ? trim((string) data_get($r->metadata, 'price_table_raw')) : '';
             $this->productCustomerPriceTable = trim((string) data_get($r->metadata, 'customer_price_table_raw'));
             $this->productCustomerPricePreview = $r->customerPriceBreakpoints();
             $this->productClientPrices = $this->group === 'product'
@@ -241,7 +248,7 @@ trait ManagesMasterEditor
                 $prices = collect($this->productCustomerPricePreview)->pluck('price')->implode("\t");
                 $this->productCustomerPriceTable = "Quantity\t".$quantities."\nProduct price\t".$prices;
             }
-            $storedPriceBreakpoints = collect((array) data_get($r->metadata, 'price_breakpoints', []))
+            $storedPriceBreakpoints = collect($canSeeSupplierCosts ? (array) data_get($r->metadata, 'price_breakpoints', []) : [])
                 ->map(fn ($row) => [
                     'quantity' => (int) data_get($row, 'quantity', 0),
                     'price' => (float) data_get($row, 'price', 0),
@@ -265,7 +272,7 @@ trait ManagesMasterEditor
                 $this->productRemoteSurchargePreview = $storedRemoteSurchargeBreakpoints;
             }
 
-            if ($this->productPriceTable === '' && $this->productPricePreview !== []) {
+            if ($canSeeSupplierCosts && $this->productPriceTable === '' && $this->productPricePreview !== []) {
                 $quantities = collect($this->productPricePreview)->pluck('quantity')->implode("	");
                 $prices = collect($this->productPricePreview)->pluck('price')->implode("	");
                 $this->productPriceTable = "Quantity	".$quantities."
@@ -279,6 +286,14 @@ Product price	".$prices;
 Remote Area charge	".$remoteRow;
                 }
             }
+            $remoteRows = $r->productRemoteSurchargeBreakpoints();
+            $this->productRemoteSurchargeTable = $remoteRows !== []
+                ? "Quantity\t".collect($remoteRows)->pluck('quantity')->implode("\t")
+                    ."\nProduct price\t".collect($remoteRows)->pluck('price')->implode("\t")
+                : '';
+            // The supplier table (and its legacy fallback) must not enter the
+            // browser's Livewire snapshot unless the role can view supplier costs.
+            if (! $canSeeSupplierCosts) $this->productPricePreview = [];
             $this->productOptions = $r->productOptions();
             $this->productOptionUploads = [];
             $this->productShipmentUrgencies = collect($r->productShipmentUrgencyOptions())
@@ -359,6 +374,10 @@ Remote Area charge	".$remoteRow;
                 ? ((int) ($metadata['order_flag_id'] ?? 0) ?: null)
                 : null;
             unset($metadata['product_image_path']);
+            if ($this->group === 'product') {
+                // A generic JSON state property must not leak confidential costs.
+                unset($metadata['price_table_raw'], $metadata['price_breakpoints']);
+            }
             $this->metadataJson = $metadata ? json_encode($metadata, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) : '';
             return;
         }
@@ -374,6 +393,7 @@ Remote Area charge	".$remoteRow;
             $this->productFormMainCategory = '';
             $this->productSize = '';
             $this->productPriceTable = '';
+            $this->productRemoteSurchargeTable = '';
             $this->productCustomerPriceTable = '';
             $this->productCustomerPricePreview = [];
             $this->productClientPrices = [];
@@ -507,6 +527,7 @@ Remote Area charge	".$remoteRow;
             'productFormMainCategory' => $this->group === 'product' ? ['required', 'string', 'max:255'] : ['nullable'],
             'productSize' => $this->group === 'product' ? ['nullable', 'string', 'max:1200'] : ['nullable'],
             'productPriceTable' => $this->group === 'product' ? ['nullable', 'string', 'max:50000'] : ['nullable'],
+            'productRemoteSurchargeTable' => $this->group === 'product' ? ['nullable', 'string', 'max:50000'] : ['nullable'],
             'productCustomerPriceTable' => $this->group === 'product' ? ['nullable', 'string', 'max:50000'] : ['nullable'],
             'productClientPrices' => $this->group === 'product' ? ['array', 'max:100'] : ['array'],
             'productClientPrices.*.client_id' => $this->group === 'product' ? ['required', 'integer', 'distinct', Rule::exists('clients', 'id')->where(fn ($q) => $q->where('is_active', true)->whereNull('purged_at'))] : ['nullable'],
@@ -652,6 +673,20 @@ Remote Area charge	".$remoteRow;
             }
         }
 
+        // The remote surcharge belongs to the product, independently of the
+        // supplier cost table. Do not erase imported/legacy surcharges merely
+        // because a supplier cost table is blank or access is restricted.
+        if ($this->group === 'product') {
+            $remoteTable = trim((string) ($data['productRemoteSurchargeTable'] ?? ''));
+            if ($remoteTable !== '') {
+                $productRemoteSurchargeBreakpoints = app(ProductPriceTableParser::class)
+                    ->parseTable($remoteTable)['price_breakpoints'];
+                if ($productRemoteSurchargeBreakpoints === []) {
+                    throw ValidationException::withMessages(['productRemoteSurchargeTable' => 'Enter valid quantities and surcharge prices.']);
+                }
+            }
+        }
+
         if ($this->group === 'product' && trim((string) $data['productCustomerPriceTable']) !== '') {
             $productCustomerPriceBreakpoints = app(ProductPriceTableParser::class)
                 ->parseTable($data['productCustomerPriceTable'])['price_breakpoints'];
@@ -683,7 +718,7 @@ Remote Area charge	".$remoteRow;
 
         // Only edited supplier tables are written. Unmodified approved prices remain authoritative.
         $supplierPriceEdits = [];
-        if ($this->group === 'product') {
+        if ($this->group === 'product' && app(\App\Services\Orders\SupplierCostVisibility::class)->allowed()) {
             $taggedSupplierIds = collect($data['productSupplierIds'] ?? [])
                 ->push($data['productSupplierId'] ?? null)
                 ->map(fn ($id) => (int) $id)->filter()->unique()->all();
@@ -808,16 +843,31 @@ Remote Area charge	".$remoteRow;
             $metadata['supplier_ids'] = $linkedSupplierIds->unique()->values()->all();
             $metadata['main_category'] = trim((string) $data['productFormMainCategory']);
             $metadata['product_size'] = trim((string) $data['productSize']) ?: null;
-            if ($productPriceBreakpoints !== []) {
+            if (! app(\App\Services\Orders\SupplierCostVisibility::class)->allowed()) {
+                // Only the existing persisted source can populate confidential
+                // supplier metadata. Ignore/reject untrusted Livewire price state.
+                if (filled($data['productPriceTable']) || $data['productSupplierPrices'] !== []) {
+                    abort(403, 'Supplier price permission required.');
+                }
+                if ($this->editId) {
+                    $persisted = MasterRecord::query()->forWorkspace($workspaceId)
+                        ->ofType('product')->findOrFail($this->editId);
+                    foreach (['price_table_raw', 'price_breakpoints'] as $key) {
+                        if (array_key_exists($key, (array) $persisted->metadata)) {
+                            $metadata[$key] = $persisted->metadata[$key];
+                        }
+                    }
+                }
+            } elseif ($productPriceBreakpoints !== []) {
                 $metadata['price_table_raw'] = trim((string) $data['productPriceTable']);
                 $metadata['price_breakpoints'] = $productPriceBreakpoints;
-                if ($productRemoteSurchargeBreakpoints !== []) {
-                    $metadata['remote_surcharge_breakpoints'] = $productRemoteSurchargeBreakpoints;
-                } else {
-                    unset($metadata['remote_surcharge_breakpoints']);
-                }
+            } elseif (app(\App\Services\Orders\SupplierCostVisibility::class)->allowed()) {
+                unset($metadata['price_table_raw'], $metadata['price_breakpoints']);
+            }
+            if ($productRemoteSurchargeBreakpoints !== []) {
+                $metadata['remote_surcharge_breakpoints'] = $productRemoteSurchargeBreakpoints;
             } else {
-                unset($metadata['price_table_raw'], $metadata['price_breakpoints'], $metadata['remote_surcharge_breakpoints']);
+                unset($metadata['remote_surcharge_breakpoints']);
             }
             if ($productCustomerPriceBreakpoints !== []) {
                 $metadata['customer_price_table_raw'] = trim((string) $data['productCustomerPriceTable']);

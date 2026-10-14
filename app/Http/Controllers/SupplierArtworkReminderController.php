@@ -20,14 +20,19 @@ final class SupplierArtworkReminderController extends Controller
     {
         $templates = $reminders->list($context->workspaceId())->map(fn ($row) => $this->serialize($row, $reminders))->all();
         $profile = app(\App\Services\CompanyProfileService::class)->current();
+        $eventOptions = $events->options($context->workspaceId());
+        $orderEmailEnabled = app(ModuleEmailControlService::class)->orderEnabled();
         return view('pages.supplier-artwork-reminders', [
             'reminderTemplates' => $templates,
+            'reminderSummary' => \App\Services\Reminders\ReminderOverview::summarize(
+                $templates, $eventOptions, $orderEmailEnabled
+            ),
             'defaultConfig' => $reminders->defaults(),
-            'reminderEvents' => $events->options($context->workspaceId()),
+            'reminderEvents' => $eventOptions,
             'reminderRecipientTypes' => OrderReminderRecipients::TYPES,
             'reminderRecipientUsers' => $recipients->userOptions($context->workspaceId()),
             'companyName' => $profile['trading_name'] ?: ($profile['legal_name'] ?: 'STEP PROMO'),
-            'orderEmailEnabled' => app(ModuleEmailControlService::class)->orderEnabled(),
+            'orderEmailEnabled' => $orderEmailEnabled,
         ]);
     }
 

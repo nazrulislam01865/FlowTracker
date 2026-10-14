@@ -83,7 +83,7 @@
     </x-catalog.product-section>
 
     @if($pricingReady)
-    @if($supplierPricingTables->isNotEmpty())
+    @if(app(\App\Services\Orders\SupplierCostVisibility::class)->allowed() && $supplierPricingTables->isNotEmpty())
         <x-catalog.product-section title="Supplier-based pricing">
             @foreach($supplierPricingTables as $supplierTable)
                 <div class="ft-product-price-preview-wrap ft-product-detail-price-wrap" style="margin-bottom:14px">
@@ -107,6 +107,9 @@
             @endforeach
         </x-catalog.product-section>
     @endif
+    @unless(app(\App\Services\Orders\SupplierCostVisibility::class)->allowed())
+        <x-catalog.product-section title="Supplier-based pricing"><small>Supplier costs are restricted. Ask an administrator for Supplier Prices → View permission.</small></x-catalog.product-section>
+    @endunless
     @if($clientPriceTables->isNotEmpty())
         <x-catalog.product-section title="Client-specific pricing">
             @foreach($clientPriceTables as $clientPrice)

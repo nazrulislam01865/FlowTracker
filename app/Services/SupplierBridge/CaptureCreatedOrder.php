@@ -145,7 +145,7 @@ final class CaptureCreatedOrder
                     DB::afterCommit(function () use ($id): void {
                         try {
                             if ($id && config('queue.default') !== 'sync') {
-                                DeliverSupplierOrder::dispatch($id)->onQueue('supplier-sync');
+                                DeliverSupplierOrder::dispatch($id)->onQueue('supplier-critical');
                             }
                         } catch (\Throwable $exception) {
                             Log::warning('Supplier order delivery queued for scheduled retry.', ['delivery_id' => $id]);

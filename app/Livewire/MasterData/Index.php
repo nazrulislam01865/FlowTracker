@@ -66,6 +66,7 @@ class Index extends Component
     public string $productFormMainCategory = '';
     public string $productSize = '';
     public string $productPriceTable = '';
+    public string $productRemoteSurchargeTable = '';
     public string $productCustomerPriceTable = '';
     public array $productCustomerPricePreview = [];
     /** @var array<int,array{client_id:string,table:string,preview:array}> */

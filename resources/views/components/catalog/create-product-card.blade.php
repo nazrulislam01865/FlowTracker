@@ -5,6 +5,7 @@
     'supplierSkipped' => false,
     'supplierRequired' => false,
     'context' => 'order',
+    'canViewSupplierPrices' => false,
     'index' => 0,
     'rowsProperty' => 'jobItems',
     'removeMethod' => 'removeProductRow',
@@ -26,7 +27,7 @@
     $supplierLabel = $supplierShortCode !== '' ? $supplierShortCode : trim((string) ($supplier?->name ?? ''));
 @endphp
 
-<article class="ft-order-selected-product-card ft-create-product-card ft-product-quantity-selected-row" wire:key="{{ $rowKeyPrefix }}-{{ $item['product_id'] ?? $index }}-{{ $index }}">
+<article class="ft-order-selected-product-card ft-create-product-card ft-product-quantity-selected-row {{ $isOrder ? 'has-extra-prices' : '' }}" wire:key="{{ $rowKeyPrefix }}-{{ $item['product_id'] ?? $index }}-{{ $index }}">
     <div class="ft-pq-selected-product">
         <span class="ft-order-product-thumb">
             @if($itemImage)
@@ -107,6 +108,19 @@
         </div>
         @if($unitPriceError)<small class="validation-error">{{ $unitPriceError }}</small>@endif
     </label>
+
+    @if($isOrder)
+        <label class="ft-pq-selected-field ft-pq-selected-price ft-pq-supplier-price">
+            <span>Supplier price</span>
+            @if($canViewSupplierPrices)
+                <div class="ft-pq-price-input is-readonly"><b>$</b>
+                    <input type="text" readonly value="{{ filled($item['supplier_price'] ?? null) ? number_format((float) $item['supplier_price'], 2, '.', '') : '' }}" placeholder="Not set" aria-label="Supplier price for {{ $itemName }}">
+                </div>
+            @else
+                <div class="ft-pq-masked-price" aria-label="Supplier price restricted" title="Supplier Prices → View permission required">•••••• <small>Restricted</small></div>
+            @endif
+        </label>
+    @endif
 
     <button type="button" class="ft-pq-remove-product" wire:click="{{ $removeMethod }}({{ $index }})" aria-label="Remove {{ $itemName }}">Remove</button>
 </article>

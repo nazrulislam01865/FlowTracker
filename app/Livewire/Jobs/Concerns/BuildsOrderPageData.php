@@ -207,6 +207,9 @@ trait BuildsOrderPageData
             // catalogues keep the prototype's Top matches + View all behaviour.
             $resultLimit = $this->createProductShowAllResults ? 100 : 3;
             $productSearchResults = $catalog->searchForOrderCreation($search, $categoryFilterId ?: null, $resultLimit);
+            if ($this->clientId && $productSearchResults->isNotEmpty()) {
+                $productSearchResults->load(['clientPrices' => fn ($query) => $query->where('client_id', (int) $this->clientId)]);
+            }
             $productSearchSuppliers = $catalog->suppliersForProducts($productSearchResults->keyBy('id'));
 
             $selectedProductDetails = $catalog->selectedProducts(

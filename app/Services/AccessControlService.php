@@ -32,6 +32,7 @@ class AccessControlService
         'catalog_products' => ['name' => 'Products', 'group' => 'Catalogue'],
         'product_categories' => ['name' => 'Product Categories', 'group' => 'Catalogue'],
         'suppliers' => ['name' => 'Suppliers', 'group' => 'Catalogue'],
+        'supplier_pricing' => ['name' => 'Supplier Prices (confidential)', 'group' => 'Catalogue'],
         'finance' => ['name' => 'Finance', 'group' => 'Commercial'],
         'tasks' => ['name' => 'Tasks & Checklists', 'group' => 'Operations'],
         'documents' => ['name' => 'Documents', 'group' => 'Records'],
@@ -60,6 +61,7 @@ class AccessControlService
         'catalog_products' => ['view','create','edit_own','edit_all','delete','assign','link','export','manage'],
         'product_categories' => ['view','create','edit_own','edit_all','delete','assign','link','export','manage'],
         'suppliers' => ['view','create','edit_own','edit_all','delete','assign','link','export','manage'],
+        'supplier_pricing' => ['view','create','edit_own','edit_all','delete','assign','link','export','manage'],
         'finance' => ['view','create','edit_own','edit_all','delete','assign','link','export','manage'],
         'tasks' => ['view','create','edit_own','edit_all','delete','assign','link','export','manage'],
         'documents' => ['view','create','edit_own','edit_all','delete','assign','link','export','manage'],
@@ -70,7 +72,7 @@ class AccessControlService
     ];
 
     /** These modules do not have per-record ownership scope. */
-    public const UNIVERSAL_RECORD_MODULES = ['dashboard', 'reports', 'notifications', 'clients', 'workflow', 'taskpacks', 'masterdata', 'catalog_products', 'product_categories', 'suppliers'];
+    public const UNIVERSAL_RECORD_MODULES = ['dashboard', 'reports', 'notifications', 'clients', 'workflow', 'taskpacks', 'masterdata', 'catalog_products', 'product_categories', 'suppliers', 'supplier_pricing'];
 
     /** Shared Product/Finance capabilities inherit record visibility from the parent Inquiry/Order. */
     public const PARENT_RECORD_MODULES = ['finance'];
