@@ -1684,6 +1684,32 @@ class LegacyInquiryService
         return $this->updateTaskStatus($task, $this->completionTaskStatus(), $actor);
     }
 
+    /** Supplier bridge task completion: no FlowTracker user is impersonated. */
+    public function completeSupplierInquiryTask(InquiryTask $task, string $supplier, int $invitationId): InquiryTask
+    {
+        abort_if($task->inquiry->result, 409, 'Inquiry is closed.');
+        if ($task->completed_at) return $task;
+        if ($task->requires_submission && ! $this->taskHasSubmissionEvidence($task)) {
+            throw ValidationException::withMessages(['file' => 'Upload the required costing file before completing this task.']);
+        }
+        $status = $this->completionTaskStatus();
+        $oldStatus = (string) $task->status;
+        $task->update($this->taskStatusPayload($status, $task) + [
+            'completed_at' => now(), 'started_at' => $task->started_at ?: now(),
+        ]);
+        Inquiry::query()->whereKey($task->inquiry_id)->whereNull('started_at')
+            ->update(['started_at' => $task->started_at]);
+        $task->inquiry->activities()->create([
+            'user_id' => null, 'event' => 'inquiry.task_completed',
+            'description' => $task->title.' completed by supplier '.$supplier.'.',
+            'meta' => ['inquiry_task_id' => $task->id, 'supplier_invitation_id' => $invitationId,
+                'old_status' => $oldStatus, 'to_status' => $status],
+        ]);
+        $this->forgetMyTaskShell($task->assignee_id ? (int) $task->assignee_id : null);
+        $this->syncAutomaticStatus($task->inquiry);
+        return $task->refresh();
+    }
+
     public function setInquiryAttentionReason(Inquiry $inquiry, string $reason, User $actor): Inquiry
     {
         abort_unless($this->visibleQuery($actor)->whereKey($inquiry->id)->exists(), 403);

@@ -145,6 +145,27 @@ class TaskService
 
     public function moveStatus(Task $task, string $status, User $actor): Task
     {
+        $baselineStart = \App\Support\Performance\OrderBaselineRecorder::enabled() ? microtime(true) : null;
+        $baselineSuccess = false;
+        try {
+            $result = $this->persistStatusTransition($task, $status, $actor);
+            $baselineSuccess = true;
+            return $result;
+        } finally {
+            if ($baselineStart !== null) {
+                \App\Support\Performance\OrderBaselineRecorder::record('task_status_mutation', [
+                    'order_id' => (int) $task->flow_job_id,
+                    'task_id' => (int) $task->id,
+                    'completed_intent' => BoardLaneResolver::isCompleted($status),
+                    'success' => $baselineSuccess,
+                    'duration_ms' => round((microtime(true) - $baselineStart) * 1000, 2),
+                ]);
+            }
+        }
+    }
+
+    private function persistStatusTransition(Task $task, string $status, User $actor): Task
+    {
         // Order workflow status changes are serialized at the database level.
         // This prevents two browser sessions from completing the same task and
         // unlocking/advancing the same phase twice. The Livewire component only
@@ -301,6 +322,19 @@ class TaskService
 
     public function updateDetailField(Task $task, string $field, mixed $value, User $actor): Task
     {
+        // Keep status and its generated confirmed document atomic on direct edits.
+        if ($field === 'status') {
+            return DB::transaction(function () use ($task, $field, $value, $actor): Task {
+                FlowJob::query()->whereKey($task->flow_job_id)->lockForUpdate()->firstOrFail();
+                $locked = Task::query()->whereKey($task->id)->lockForUpdate()->firstOrFail();
+                return $this->persistDetailField($locked, $field, $value, $actor);
+            }, 3);
+        }
+        return $this->persistDetailField($task, $field, $value, $actor);
+    }
+
+    private function persistDetailField(Task $task, string $field, mixed $value, User $actor): Task
+    {
         $allowed = ['title', 'assignee_id', 'status', 'priority', 'start_date', 'due_date', 'description'];
         abort_unless(in_array($field, $allowed, true), 422, 'This task field cannot be edited.');
 
@@ -351,7 +385,11 @@ class TaskService
             $task = $this->claimForAction($task, $actor, 'updated the '.$actionLabel);
         }
 
+        $wasCompleted = (bool) $task->completed_at;
         $task->update($updates);
+        if ($field === 'status' && BoardLaneResolver::isCompleted($new)) {
+            $this->generateConfirmedArtworkIfNeeded($task, $actor, $wasCompleted);
+        }
 
         if ($field === 'assignee_id' && $new) {
             FlowJobMember::firstOrCreate(
@@ -385,6 +423,15 @@ class TaskService
 
     public function update(Task $task, array $data, User $actor, string $action = 'updated the task'): Task
     {
+        // Modal edits can bypass moveStatus(). Serialize completed transitions
+        // as well, so an unsuccessful PDF render cannot commit a false success.
+        if (BoardLaneResolver::isCompleted((string) ($data['status'] ?? $task->status)) && DB::transactionLevel() === 0) {
+            return DB::transaction(function () use ($task, $data, $actor, $action): Task {
+                FlowJob::query()->whereKey($task->flow_job_id)->lockForUpdate()->firstOrFail();
+                $locked = Task::query()->whereKey($task->id)->lockForUpdate()->firstOrFail();
+                return $this->update($locked, $data, $actor, $action);
+            }, 3);
+        }
         $this->assertEditable($task, $actor);
         $status = trim((string) ($data['status'] ?? $task->status));
         abort_if($status === '', 422, 'Task status is required.');
@@ -396,6 +443,7 @@ class TaskService
         if (BoardLaneResolver::isCompleted($status)) $this->ensureCompletionRequirements($task);
 
         $task = $this->claimForAction($task, $actor, $action);
+        $wasCompleted = (bool) $task->completed_at;
         $before = $task->only(['status','assignee_id','progress','needs_attention','attention_reason']);
         $assigneeId = (int) $actor->id;
 
@@ -415,6 +463,9 @@ class TaskService
         }
 
         $task->update($updates);
+        if (BoardLaneResolver::isCompleted($status)) {
+            $this->generateConfirmedArtworkIfNeeded($task, $actor, $wasCompleted);
+        }
 
         if ($assigneeId) {
             FlowJobMember::firstOrCreate(
@@ -451,6 +502,19 @@ class TaskService
         $this->refreshJobState($task, $actor);
 
         return $task->refresh();
+    }
+
+    /** Run only at a completion transition; ordinary reads and updates do no work. */
+    private function generateConfirmedArtworkIfNeeded(Task $task, User $actor, bool $wasCompleted): void
+    {
+        if ($wasCompleted || ! (bool) config('flowtrack.order_tracking_enabled', false)) {
+            return;
+        }
+        if (app(OrderWorkflowActionService::class)->automationKey($task) !== 'ART_INTERNAL_REVIEW') {
+            return;
+        }
+
+        app(ArtworkTrackingPdfService::class)->generate($task->job()->firstOrFail(), $task, $actor);
     }
 
     public function addChecklistItem(Task $task, string $label, User $actor): FlowTaskChecklistItem

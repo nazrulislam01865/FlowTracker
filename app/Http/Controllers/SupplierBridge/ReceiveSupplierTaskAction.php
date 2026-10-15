@@ -26,6 +26,26 @@ final class ReceiveSupplierTaskAction extends Controller
 {
     public function __invoke(Request $request): JsonResponse
     {
+        $baselineStart = \App\Support\Performance\OrderBaselineRecorder::enabled() ? microtime(true) : null;
+        $baselineStatus = null;
+        try {
+            $response = $this->receiveSignedAction($request);
+            $baselineStatus = $response->getStatusCode();
+            return $response;
+        } finally {
+            if ($baselineStart !== null) {
+                \App\Support\Performance\OrderBaselineRecorder::record('supplier_task_action_http', [
+                    'status' => $baselineStatus,
+                    'success' => $baselineStatus !== null && $baselineStatus >= 200 && $baselineStatus < 300,
+                    'order_id' => $request->attributes->get('flowtrack_baseline_order_id'),
+                    'duration_ms' => round((microtime(true) - $baselineStart) * 1000, 2),
+                ]);
+            }
+        }
+    }
+
+    private function receiveSignedAction(Request $request): JsonResponse
+    {
         $secret = (string) config('supplier_bridge.secret');
         $multipart = $request->isMethod('post') && str_starts_with((string) $request->header('Content-Type'), 'multipart/form-data');
         // The file bytes are streamed by PHP into a temporary file. The digest is
@@ -110,6 +130,9 @@ final class ReceiveSupplierTaskAction extends Controller
         $supplierId = (int) $validated['supplier_id'];
         $orderId = (int) $validated['order_id'];
         $taskId = (int) $validated['task_id'];
+        if (\App\Support\Performance\OrderBaselineRecorder::enabled()) {
+            $request->attributes->set('flowtrack_baseline_order_id', $orderId);
+        }
         // Check the live order-product supplier relationship, never a cached browser role.
         $links = DB::table('flow_job_items as i')
             ->join('master_records as s', 's.id', '=', 'i.supplier_id')

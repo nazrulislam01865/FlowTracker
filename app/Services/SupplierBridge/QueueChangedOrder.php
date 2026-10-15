@@ -37,6 +37,14 @@ final class QueueChangedOrder
                 'updated_at' => now(),
             ]);
 
+        if (\App\Support\Performance\OrderBaselineRecorder::enabled()) {
+            $baselineMark = static fn () => \App\Support\Performance\OrderBaselineRecorder::record('supplier_pending', [
+                'order_id' => $orderId,
+            ]);
+            if (DB::transactionLevel() > 0) DB::afterCommit($baselineMark);
+            else $baselineMark();
+        }
+
         // Never call the remote service during a user save. The persisted outbox
         // still works when a local server or queue worker is temporarily offline.
         if (config('queue.default') === 'sync') return;

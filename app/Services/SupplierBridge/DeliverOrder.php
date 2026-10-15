@@ -12,6 +12,30 @@ final class DeliverOrder
 {
     public function send(int $id): bool
     {
+        $baselineStart = \App\Support\Performance\OrderBaselineRecorder::enabled() ? microtime(true) : null;
+        $orderId = null;
+        $supplierId = null;
+        $baselineSuccess = false;
+        $baselineApplied = null;
+        try {
+            $baselineSuccess = $this->sendCanonical($id, $orderId, $supplierId, $baselineApplied);
+            return $baselineSuccess;
+        } finally {
+            if ($baselineStart !== null) {
+                \App\Support\Performance\OrderBaselineRecorder::record('supplier_delivery_attempt', [
+                    'delivery_id' => $id,
+                    'order_id' => $orderId,
+                    'supplier_id' => $supplierId,
+                    'success' => $baselineSuccess,
+                    'applied' => $baselineApplied,
+                    'duration_ms' => round((microtime(true) - $baselineStart) * 1000, 2),
+                ]);
+            }
+        }
+    }
+
+    private function sendCanonical(int $id, ?int &$orderId, ?int &$supplierId, ?bool &$baselineApplied): bool
+    {
         $claimed = DB::table('supplier_order_deliveries')->where('id', $id)
             ->where(function ($query): void {
                 $query->where('status', 'pending')
@@ -29,6 +53,8 @@ final class DeliverOrder
         }
 
         $delivery = DB::table('supplier_order_deliveries')->find($id);
+        $orderId = $delivery ? (int) $delivery->flow_job_id : null;
+        $supplierId = $delivery ? (int) $delivery->supplier_id : null;
         try {
             $url = config('supplier_bridge.url');
             $secret = config('supplier_bridge.secret');
@@ -106,6 +132,7 @@ final class DeliverOrder
                 'payload' => json_encode($metadata, JSON_THROW_ON_ERROR),
                 'last_error' => null, 'updated_at' => now(),
             ]);
+            $baselineApplied = $applied === 1;
             if ($applied === 1) {
                 try {
                     app(\App\Services\ReverbChannelService::class)->triggerSupplierOrder(

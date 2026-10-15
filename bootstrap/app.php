@@ -30,12 +30,17 @@ return Application::configure(basePath: dirname(__DIR__))
 
             Route::get('/api/supplier-bridge/rfq-documents/{invitation}/{document}', \App\Http\Controllers\SupplierBridge\DownloadRfqDocument::class)
                 ->whereNumber('invitation')->whereNumber('document')->middleware('throttle:60,1');
+            Route::get('/api/supplier-bridge/rfq-task-documents/{invitation}/{document}', \App\Http\Controllers\SupplierBridge\DownloadRfqDocument::class)
+                ->whereNumber('invitation')->whereNumber('document')->defaults('task_document', true)
+                ->middleware('throttle:supplier-inquiry-task-document-bridge');
 
             Route::get('/api/supplier-bridge/order-artwork/{order}/{document}', \App\Http\Controllers\SupplierBridge\DownloadOrderArtwork::class)
                 ->whereNumber('order')->whereNumber('document')->middleware('throttle:60,1');
 
             Route::post('/api/supplier-bridge/rfq-quotation-files', \App\Http\Controllers\SupplierBridge\ReceiveSupplierQuotationFile::class)
                 ->middleware('throttle:30,1');
+            Route::post('/api/supplier-bridge/inquiry-task-actions', \App\Http\Controllers\SupplierBridge\ReceiveSupplierInquiryTaskAction::class)
+                ->middleware('throttle:supplier-inquiry-task-bridge');
             Route::post('/api/supplier-bridge/rfq-quotations', \App\Http\Controllers\SupplierBridge\ReceiveSupplierQuotation::class)
                 ->middleware('throttle:30,1');
             Route::post('/api/supplier-bridge/workflow-task-actions', \App\Http\Controllers\SupplierBridge\ReceiveSupplierTaskAction::class)

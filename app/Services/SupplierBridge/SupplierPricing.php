@@ -16,9 +16,11 @@ final class SupplierPricing
             ->where('product_id', $product->id)->where('supplier_id', $supplierId)
             ->value('price_breakpoints');
 
+        // Price-proposal baselines must match the supplier-only catalogue. An
+        // unconfigured supplier has no approved tiers, not a product fallback.
         return $override !== null
             ? $this->normalize(json_decode((string) $override, true) ?: [])
-            : $this->normalize($product->supplierPriceBreakpoints());
+            : [];
     }
 
     /** @param array<mixed> $rows */

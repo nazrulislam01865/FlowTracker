@@ -7,6 +7,14 @@ return [
     'document_disk' => env('FLOWTRACK_DOCUMENT_DISK', 'flowtrack_private'),
     'quarantine_disk' => env('FLOWTRACK_QUARANTINE_DISK', 'flowtrack_quarantine'),
     'legacy_document_disks' => array_values(array_filter(array_map('trim', explode(',', env('FLOWTRACK_LEGACY_DOCUMENT_DISKS', 'public,local'))))),
+    // External tools run only when a confirmed artwork PDF is created or repaired.
+    // Set full executable paths on servers where PHP-FPM has a restricted PATH.
+    'artwork_pdf_tools' => [
+        'pdfinfo' => env('FLOWTRACK_ARTWORK_PDFINFO', 'pdfinfo'),
+        'pdf_renderer' => env('FLOWTRACK_ARTWORK_PDF_RENDERER', 'pdftoppm'),
+        'office_converter' => env('FLOWTRACK_ARTWORK_OFFICE_CONVERTER', 'soffice'),
+        'image_converter' => env('FLOWTRACK_ARTWORK_IMAGE_CONVERTER', 'magick'),
+    ],
     'artwork_chunk_upload' => [
         // 15MB keeps each request below the application's normal 20MB attachment
         // ceiling while cutting the number of requests for 100-400MB artwork.

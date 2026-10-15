@@ -3,6 +3,7 @@
 namespace App\Services\SupplierBridge;
 
 use App\Models\InquiryRfqInvitation;
+use App\Models\InquiryTask;
 use App\Models\MasterRecord;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -59,6 +60,7 @@ final class DeliverRfq
                 'inquiry:id,workspace_id,inquiry_number,subject,requirement_notes,required_delivery_date,currency,result',
                 'inquiry.items:id,inquiry_id,item_name,category,quantity,unit,notes,sort_order',
                 'inquiry.documents' => fn ($q) => $q->whereNull('inquiry_task_id')->select('id', 'inquiry_id', 'inquiry_task_id', 'name', 'size', 'mime_type', 'updated_at'),
+                'inquiry.tasks' => fn ($q) => $q->orderBy('sequence')->limit(1),
             ])->findOrFail($delivery->invitation_id);
             if (! $invitation->invited_at || $invitation->email_status === 'Draft' || $invitation->inquiry?->result === 'dead') {
                 throw new RuntimeException('RFQ invitation is not active for delivery.');
@@ -93,6 +95,23 @@ final class DeliverRfq
                 ];
             })->all();
             if ($items === [] || count($items) > 100) throw new RuntimeException('RFQ must contain 1-100 products.');
+            $firstTask = $inquiry->tasks->first();
+            // The first inquiry task can have submissions from several RFQ
+            // invitations. Include only this invitation's actual FlowTracker
+            // files, including after task completion and on subsequent resync.
+            $submittedFiles = $firstTask
+                ? $firstTask->documents()->where('note', 'like', 'Supplier RFQ '.$invitation->id.' |%')
+                    ->limit(InquiryTask::MAX_DOCUMENTS)->get(['id', 'name', 'mime_type', 'size', 'updated_at'])
+                    ->map(static fn ($file): array => [
+                        'id' => (int) $file->id,
+                        'name' => mb_substr(basename(str_replace('\\', '/', (string) $file->name)), 0, 255),
+                        'mime_type' => (string) $file->mime_type,
+                        'size' => (int) $file->size,
+                        'version' => (string) $file->updated_at?->format('Uu'),
+                    ])->values()->all()
+                : [];
+            // Existing buyer-approved inquiry-level documents only. Task uploads may
+            // contain private supplier costs and must never be shared with peers.
             $docs = $inquiry->documents->map(static fn ($document): array => [
                 'id' => (int) $document->id,
                 'name' => mb_substr(basename((string) $document->name), 0, 255),
@@ -116,6 +135,16 @@ final class DeliverRfq
                     'due_at' => $invitation->due_at?->toIso8601String(),
                     'items' => $items,
                     'documents' => $docs,
+                    'supplier_task' => $firstTask ? [
+                        'id' => (int) $firstTask->id,
+                        'title' => mb_substr((string) $firstTask->title, 0, 255),
+                        'instructions' => mb_substr(strip_tags((string) $firstTask->description), 0, 4000),
+                        'status' => (string) $firstTask->status,
+                        'completed' => $firstTask->completed_at !== null,
+                        'requires_submission' => (bool) $firstTask->requires_submission,
+                        'due_date' => $firstTask->due_date?->format('Y-m-d'),
+                        'uploaded_files' => $submittedFiles,
+                    ] : null,
                 ],
             ];
             $response = app(PortalClient::class)->post('rfqs', $payload);

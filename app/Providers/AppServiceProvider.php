@@ -28,6 +28,9 @@ use App\Services\SetupContext;
 use App\Services\WorkspaceContext;
 use App\Support\Performance\RequestPerformanceMonitor;
 use App\Services\Observability\OperationsMetrics;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Cache\Events\CacheFailedOver;
 use Illuminate\Cache\Events\CacheHit;
 use Illuminate\Cache\Events\CacheMissed;
@@ -68,6 +71,15 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        // A signed supplier inquiry file must not be rejected because other
+        // supplier/order bridge actions from the same server exhausted the
+        // generic IP throttle counter. The HMAC and task scope remain enforced
+        // by the receiving controller.
+        RateLimiter::for('supplier-inquiry-task-bridge', static fn (Request $request): Limit =>
+            Limit::perMinute(60)->by('signed-inquiry-task:' . $request->ip()));
+        RateLimiter::for('supplier-inquiry-task-document-bridge', static fn (Request $request): Limit =>
+            Limit::perMinute(120)->by('signed-inquiry-document:' . $request->ip()));
+
         // FlowTrack's Alpine component factories are installed by the Vite module in
         // <head>. Livewire ships its own Alpine runtime and otherwise starts it from a
         // classic script at the end of <body>, which can run before that module has
@@ -100,6 +112,7 @@ class AppServiceProvider extends ServiceProvider
         }
 
         \App\Models\Workspace::observe(\App\Observers\SupplierWorkspaceBrandObserver::class);
+        InquiryTask::observe(\App\Observers\SupplierInquiryTaskObserver::class);
 
         // Supplier sync only reacts to writes, after commit. Existing page reads
         // and master-data screens do not perform any extra catalogue queries.

@@ -524,6 +524,26 @@ class OrderWorkflowActionService
      */
     public function perform(Task $task, User $actor, ?string $decision = null, ?string $comment = null, array $payload = [], array $attachments = []): Task
     {
+        $baselineStart = \App\Support\Performance\OrderBaselineRecorder::enabled() ? microtime(true) : null;
+        $baselineSuccess = false;
+        try {
+            $result = $this->performCanonical($task, $actor, $decision, $comment, $payload, $attachments);
+            $baselineSuccess = true;
+            return $result;
+        } finally {
+            if ($baselineStart !== null) {
+                \App\Support\Performance\OrderBaselineRecorder::record('task_workflow_action', [
+                    'order_id' => (int) $task->flow_job_id,
+                    'task_id' => (int) $task->id,
+                    'success' => $baselineSuccess,
+                    'duration_ms' => round((microtime(true) - $baselineStart) * 1000, 2),
+                ]);
+            }
+        }
+    }
+
+    private function performCanonical(Task $task, User $actor, ?string $decision, ?string $comment, array $payload, array $attachments): Task
+    {
         return DB::transaction(function () use ($task, $actor, $decision, $comment, $payload, $attachments): Task {
             $locked = Task::query()->whereKey($task->id)->lockForUpdate()->with(['job.phase', 'setupTemplate'])->firstOrFail();
             $job = FlowJob::query()->whereKey($locked->flow_job_id)->lockForUpdate()->with(['client', 'items'])->firstOrFail();
@@ -562,12 +582,9 @@ class OrderWorkflowActionService
             }
 
             if ($key === 'ART_INTERNAL_REVIEW' && $decision === 'confirm') {
-                $completed = $this->complete($locked, $actor);
-                if ((bool) config('flowtrack.order_tracking_enabled', false)) {
-                    app(ArtworkTrackingPdfService::class)->generate($job->refresh(), $locked->refresh(), $actor);
-                }
-
-                return $completed->refresh();
+                // TaskService generates the PDF at the completed-status transition,
+                // including direct task completion; do not generate it twice.
+                return $this->complete($locked, $actor)->refresh();
             }
 
             if ($key === 'ART_CLIENT_ERP_DECISION' && $decision === 'erp_uploaded') {

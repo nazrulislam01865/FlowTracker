@@ -4,6 +4,7 @@ namespace App\Http\Controllers\SupplierBridge;
 
 use App\Models\InquiryDocument;
 use App\Models\InquiryRfqInvitation;
+use App\Models\InquiryTask;
 use App\Services\SecureDocumentStorage;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
@@ -31,8 +32,17 @@ final class DownloadRfqDocument extends Controller
         $rfq = InquiryRfqInvitation::query()->whereKey($invitation)
             ->where('supplier_id', (int) $supplier)
             ->whereNotNull('invited_at')->where('email_status', '!=', 'Draft')->firstOrFail();
-        $file = InquiryDocument::query()->whereKey($document)->where('inquiry_id', $rfq->inquiry_id)
-            ->whereNull('inquiry_task_id')->firstOrFail();
+        $fileQuery = InquiryDocument::query()->whereKey($document)->where('inquiry_id', $rfq->inquiry_id);
+        if ($request->route('task_document')) {
+            $firstTaskId = InquiryTask::query()->where('inquiry_id', $rfq->inquiry_id)
+                ->orderBy('sequence')->orderBy('id')->value('id');
+            abort_unless($firstTaskId, 404);
+            $fileQuery->where('inquiry_task_id', $firstTaskId)
+                ->where('note', 'like', 'Supplier RFQ '.$rfq->id.' |%');
+        } else {
+            $fileQuery->whereNull('inquiry_task_id');
+        }
+        $file = $fileQuery->firstOrFail();
         if ($version !== '' && $version !== (string) $file->updated_at?->format('Uu')) abort(404);
         abort_if($file->size > 20971520, 413);
         $located = $storage->locate((string) $file->path);

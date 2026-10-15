@@ -26,11 +26,14 @@ class RequestPerformanceMonitor
     private array $outgoingStartedAt = [];
     private bool $sampled = false;
     private bool $activeRequest = false;
+    private ?array $orderBaselineContext = null;
+    private array $orderBaselineShapes = [];
 
-    public function start(): void
+    public function start(Request $request): void
     {
         $this->reset();
-        $this->sampled = $this->shouldSample();
+        $this->orderBaselineContext = OrderBaselineRecorder::httpContext($request);
+        $this->sampled = $this->shouldSample() || $this->orderBaselineContext !== null;
         $this->activeRequest = true;
         $this->startedAt = microtime(true);
     }
@@ -41,6 +44,14 @@ class RequestPerformanceMonitor
 
         $this->queryCount++;
         $this->queryTimeMs += (float) $query->time;
+        if ($this->orderBaselineContext !== null) {
+            // Hash SQL templates. Bindings/values and raw SQL stay out of files.
+            $key = substr(hash('sha256', $query->sql), 0, 16);
+            $shape = $this->orderBaselineShapes[$key] ?? ['hash' => $key, 'count' => 0, 'time_ms' => 0.0];
+            $shape['count']++;
+            $shape['time_ms'] += (float) $query->time;
+            $this->orderBaselineShapes[$key] = $shape;
+        }
 
         if (config('performance.query_fingerprints', false)) {
             $fingerprint = preg_replace('/\s+/', ' ', trim($query->sql)) ?: trim($query->sql);
@@ -183,6 +194,25 @@ class RequestPerformanceMonitor
             ));
         }
 
+        if ($this->orderBaselineContext !== null) {
+            $shapes = array_values($this->orderBaselineShapes);
+            usort($shapes, static fn (array $a, array $b): int => $b['time_ms'] <=> $a['time_ms']);
+            $shapes = array_slice($shapes, 0, max(1, min(50, (int) config('order_baseline.max_query_shapes', 15))));
+            OrderBaselineRecorder::record('http_request', array_merge($this->orderBaselineContext, [
+                'status' => $response->getStatusCode(),
+                'duration_ms' => round($durationMs, 2),
+                'db_query_count' => $this->queryCount,
+                'db_time_ms' => round($this->queryTimeMs, 2),
+                'non_db_ms' => round(max(0.0, $durationMs - $this->queryTimeMs), 2),
+                'peak_php_memory_mb' => round(memory_get_peak_usage(true) / 1048576, 2),
+                'request_bytes' => max(0, (int) $request->header('Content-Length', 0)),
+                'response_bytes' => $response->headers->has('Content-Length')
+                    ? (int) $response->headers->get('Content-Length') : null,
+                'user_id' => $request->user()?->id,
+                'top_query_shapes' => $shapes,
+            ]));
+        }
+
         $this->writeRequestLog($durationMs, $payload);
         $this->operationsMetrics->recordRequest($payload);
         $this->activeRequest = false;
@@ -197,6 +227,16 @@ class RequestPerformanceMonitor
         $payload['exception'] = $exception::class;
         $payload['exception_message'] = $exception->getMessage();
 
+        if ($this->orderBaselineContext !== null) {
+            OrderBaselineRecorder::record('http_request', array_merge($this->orderBaselineContext, [
+                'status' => 500,
+                'exception' => $exception::class,
+                'duration_ms' => round($durationMs, 2),
+                'db_query_count' => $this->queryCount,
+                'db_time_ms' => round($this->queryTimeMs, 2),
+                'peak_php_memory_mb' => round(memory_get_peak_usage(true) / 1048576, 2),
+            ]));
+        }
         Log::warning('FlowTrack failed request performance', $payload);
         $this->operationsMetrics->recordRequest($payload, true);
         $this->activeRequest = false;
@@ -314,5 +354,7 @@ class RequestPerformanceMonitor
         $this->outgoingStartedAt = [];
         $this->sampled = false;
         $this->activeRequest = false;
+        $this->orderBaselineContext = null;
+        $this->orderBaselineShapes = [];
     }
 }

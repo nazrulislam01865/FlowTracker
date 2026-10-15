@@ -13,18 +13,27 @@ use RuntimeException;
 
 final class ArtworkTrackingPdfService
 {
-    public function generate(FlowJob $job, Task $reviewTask, User $actor): Document
+    public function generate(FlowJob $job, Task $reviewTask, User $actor, bool $force = false): Document
     {
         $uploadTask = Task::query()
             ->where('flow_job_id', $job->id)
             ->where('workflow_phase_id', $reviewTask->workflow_phase_id)
-            ->whereNotNull('task_pack_task_id')
             ->with('setupTemplate')
             ->get()
             ->first(fn (Task $candidate): bool => app(OrderWorkflowActionService::class)->automationKey($candidate) === 'ART_PREPARE_UPLOAD');
 
         if (! $uploadTask) {
-            throw new RuntimeException('The confirmed Artwork upload task could not be found.');
+            // Older Task Packs sometimes moved upload tasks to another phase.
+            // Only accept an unambiguous fallback for the same Order.
+            $candidates = Task::query()
+                ->where('flow_job_id', $job->id)
+                ->with('setupTemplate')
+                ->get()
+                ->filter(fn (Task $candidate): bool => app(OrderWorkflowActionService::class)->automationKey($candidate) === 'ART_PREPARE_UPLOAD');
+            $uploadTask = $candidates->count() === 1 ? $candidates->first() : null;
+        }
+        if (! $uploadTask) {
+            throw new RuntimeException('The confirmed Artwork upload task could not be uniquely identified for this Order.');
         }
 
         $artwork = app(DocumentService::class)->currentArtworkDocuments($uploadTask);
@@ -40,7 +49,7 @@ final class ArtworkTrackingPdfService
             ->latest('id')
             ->first();
 
-        if ($existing && app(SecureDocumentStorage::class)->locate((string) $existing->path)) {
+        if (! $force && $existing && app(SecureDocumentStorage::class)->locate((string) $existing->path)) {
             return $existing;
         }
 
@@ -79,7 +88,9 @@ final class ArtworkTrackingPdfService
                 ],
             );
         } catch (\Throwable $exception) {
-            $disk->delete($path);
+            if (! $existing) {
+                $disk->delete($path);
+            }
             throw $exception;
         }
 
@@ -97,27 +108,38 @@ final class ArtworkTrackingPdfService
         $border = [0.84, 0.88, 0.93];
         $companyHeader = $this->companyHeader();
 
-        foreach ($artwork as $index => $artworkDocument) {
-            if ($index > 0) {
-                $doc->newPage();
-            }
-
-            $this->renderArtworkPage(
-                $doc,
-                $artworkDocument,
-                $trackingUrl,
-                $index + 1,
-                $artwork->count(),
-                $companyHeader,
-                $border,
-                $navy,
-                $green,
-                $text,
-                $muted,
-            );
+        // Conversion happens only on confirmation / explicit repair, never in
+        // a page render. Each request owns its temporary files and removes them.
+        $directory = sys_get_temp_dir().'/flowtrack-artwork-'.bin2hex(random_bytes(12));
+        if (! @mkdir($directory, 0700) && ! is_dir($directory)) {
+            throw new RuntimeException('Could not create a temporary artwork preview directory.');
         }
-
-        return $doc->output();
+        try {
+            $pageNumber = 0;
+            foreach ($artwork as $position => $artworkDocument) {
+                $previews = app(ArtworkPreviewRenderer::class)->pages($artworkDocument, $directory);
+                foreach ($previews as $pageIndex => $preview) {
+                    if ($pageNumber++ > 0) {
+                        $doc->newPage();
+                    }
+                    $this->renderArtworkPage(
+                        $doc, $artworkDocument, $preview, $trackingUrl,
+                        $position + 1, $artwork->count(), $pageIndex + 1, count($previews),
+                        $companyHeader, $border, $navy, $green, $text, $muted,
+                    );
+                }
+            }
+            return $doc->output();
+        } finally {
+            $files = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($directory, \FilesystemIterator::SKIP_DOTS),
+                \RecursiveIteratorIterator::CHILD_FIRST,
+            );
+            foreach ($files as $file) {
+                $file->isDir() ? @rmdir($file->getPathname()) : @unlink($file->getPathname());
+            }
+            @rmdir($directory);
+        }
     }
 
     private function drawQr(SimplePdfDocument $doc, string $url, float $x, float $y, float $size): void
@@ -146,9 +168,12 @@ final class ArtworkTrackingPdfService
     private function renderArtworkPage(
         SimplePdfDocument $doc,
         Document $artwork,
+        string $preview,
         string $trackingUrl,
         int $position,
         int $total,
+        int $pageIndex,
+        int $pageCount,
         array $companyHeader,
         array $border,
         array $navy,
@@ -161,8 +186,8 @@ final class ArtworkTrackingPdfService
         // Keep the document identification compact so the confirmed artwork
         // remains the focus of the page.
         $doc->text(42, 735, 'CONFIRMED ARTWORK', 17, true, $navy);
-        if ($total > 1) {
-            $doc->text(42, 716, 'Artwork '.$position.' of '.$total, 7.5, false, $muted);
+        if ($total > 1 || $pageCount > 1) {
+            $doc->text(42, 716, 'Artwork '.$position.' of '.$total.' / Page '.$pageIndex.' of '.$pageCount, 7.5, false, $muted);
         }
         $doc->line(42, 706, 452, 706, 2.2, $green);
 
@@ -177,49 +202,27 @@ final class ArtworkTrackingPdfService
         $this->drawQr($doc, $trackingUrl, $qrX, $qrY, $qrSize);
         $doc->textCentered($qrX + ($qrSize / 2), 650, 'Scan for live order status', 6.8, true, $green);
 
-        $preview = $this->previewPath($artwork);
-        try {
-            $frameX = 42.0;
-            $frameY = 66.0;
-            $frameWidth = 511.0;
-            $frameHeight = 566.0;
-            $padding = 12.0;
-            $doc->rect($frameX, $frameY, $frameWidth, $frameHeight, 0.7, $border);
+        $frameX = 42.0;
+        $frameY = 66.0;
+        $frameWidth = 511.0;
+        $frameHeight = 566.0;
+        $padding = 12.0;
+        $doc->rect($frameX, $frameY, $frameWidth, $frameHeight, 0.7, $border);
 
-            if ($preview !== null && ($dimensions = @getimagesize($preview))) {
-                $maxWidth = $frameWidth - ($padding * 2);
-                $maxHeight = $frameHeight - ($padding * 2);
-                $scale = min(
-                    $maxWidth / max(1, (int) $dimensions[0]),
-                    $maxHeight / max(1, (int) $dimensions[1]),
-                );
-                $width = max(1.0, (int) $dimensions[0] * $scale);
-                $height = max(1.0, (int) $dimensions[1] * $scale);
-                $x = $frameX + (($frameWidth - $width) / 2);
-                $y = $frameY + (($frameHeight - $height) / 2);
-
-                if ($doc->image($preview, $x, $y, $width, $height)) {
-                    return;
-                }
-            }
-
-            $doc->textCentered(297.5, 380, 'Confirmed artwork', 14, true, $navy);
-            $doc->wrappedText(
-                92,
-                352,
-                $this->plain((string) $artwork->name),
-                411,
-                10,
-                14,
-                false,
-                $text,
-                4,
-            );
-            $doc->textCentered(297.5, 300, 'Preview unavailable for this file format.', 8.5, false, $muted);
-        } finally {
-            if ($preview !== null && str_starts_with($preview, sys_get_temp_dir().DIRECTORY_SEPARATOR.'flowtrack-artwork-')) {
-                @unlink($preview);
-            }
+        $dimensions = @getimagesize($preview);
+        if (! $dimensions || empty($dimensions[0]) || empty($dimensions[1])) {
+            throw new RuntimeException('The confirmed artwork preview could not be read: '.$artwork->name);
+        }
+        $scale = min(
+            ($frameWidth - 2 * $padding) / (float) $dimensions[0],
+            ($frameHeight - 2 * $padding) / (float) $dimensions[1],
+        );
+        $width = max(1.0, (float) $dimensions[0] * $scale);
+        $height = max(1.0, (float) $dimensions[1] * $scale);
+        $x = $frameX + (($frameWidth - $width) / 2);
+        $y = $frameY + (($frameHeight - $height) / 2);
+        if (! $doc->image($preview, $x, $y, $width, $height)) {
+            throw new RuntimeException('The confirmed artwork could not be embedded in the PDF: '.$artwork->name);
         }
     }
 
@@ -325,87 +328,6 @@ final class ArtworkTrackingPdfService
         $value = trim($value);
         if ($value === '' || mb_strlen($value) <= $limit) return $value;
         return rtrim(mb_substr($value, 0, max(1, $limit - 1))).'...';
-    }
-
-    private function previewPath(Document $artwork): ?string
-    {
-        $resolved = app(SecureDocumentStorage::class)->locate((string) $artwork->path);
-        if ($resolved === null) return null;
-
-        $disk = Storage::disk($resolved['disk']);
-        $path = $resolved['path'];
-        $mime = strtolower(trim((string) $artwork->mime_type));
-
-        if (str_starts_with($mime, 'image/')) {
-            return $this->localCopy($disk, $path);
-        }
-
-        if ($mime === 'application/pdf' && class_exists(\Imagick::class)) {
-            $source = $this->localCopy($disk, $path);
-            if ($source === null) return null;
-
-            $preview = tempnam(sys_get_temp_dir(), 'flowtrack-artwork-');
-            if ($preview === false) {
-                if (str_starts_with($source, sys_get_temp_dir().DIRECTORY_SEPARATOR.'flowtrack-artwork-')) @unlink($source);
-                return null;
-            }
-
-            try {
-                $image = new \Imagick();
-                $image->setResolution(144, 144);
-                $image->readImage($source.'[0]');
-                $image->setImageFormat('png');
-                $image->setImageBackgroundColor('white');
-                $image->setImageAlphaChannel(\Imagick::ALPHACHANNEL_REMOVE);
-                $image->writeImage($preview);
-                $image->clear();
-                $image->destroy();
-                return $preview;
-            } catch (\Throwable) {
-                @unlink($preview);
-                return null;
-            } finally {
-                if (str_starts_with($source, sys_get_temp_dir().DIRECTORY_SEPARATOR.'flowtrack-artwork-')) @unlink($source);
-            }
-        }
-
-        return null;
-    }
-
-    private function localCopy($disk, string $path): ?string
-    {
-        try {
-            $local = $disk->path($path);
-            if (is_string($local) && $local !== '' && is_file($local) && is_readable($local)) {
-                return $local;
-            }
-        } catch (\Throwable) {
-        }
-
-        $stream = $disk->readStream($path);
-        if ($stream === false) return null;
-
-        $temporary = tempnam(sys_get_temp_dir(), 'flowtrack-artwork-');
-        if ($temporary === false) {
-            if (is_resource($stream)) fclose($stream);
-            return null;
-        }
-
-        $target = fopen($temporary, 'wb');
-        if ($target === false) {
-            if (is_resource($stream)) fclose($stream);
-            @unlink($temporary);
-            return null;
-        }
-
-        try {
-            stream_copy_to_stream($stream, $target);
-        } finally {
-            if (is_resource($stream)) fclose($stream);
-            fclose($target);
-        }
-
-        return $temporary;
     }
 
     private function plain(string $value): string

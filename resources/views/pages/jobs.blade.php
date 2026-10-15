@@ -19,4 +19,8 @@
     {{-- Plain list mode has no route context to preserve and is safe to defer. --}}
     <livewire:orders.index defer />
 @endif
+@if(config('order_baseline.enabled') && request()->integer('open') > 0)
+    {{-- Only on a benchmarked detail GET; read-only browser timing collector. --}}
+    <script src="{{ asset('js/order-baseline.js') }}" defer></script>
+@endif
 @endsection

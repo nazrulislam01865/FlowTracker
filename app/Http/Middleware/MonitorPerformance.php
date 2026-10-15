@@ -14,7 +14,7 @@ class MonitorPerformance
 
     public function handle(Request $request, Closure $next): Response
     {
-        $this->monitor->start();
+        $this->monitor->start($request);
 
         try {
             $response = $next($request);

@@ -80,8 +80,9 @@ final class SyncSupplier
             'active' => $supplier->status === 'active',
             'products' => $products->map(function ($product) use ($overrides, $pricing): array {
                 $raw = $overrides->get($product->id);
-                $rows = $raw !== null ? $pricing->normalize(json_decode((string) $raw, true) ?: [])
-                    : $pricing->normalize($product->supplierPriceBreakpoints());
+                // Supplier-specific approved prices only. Never substitute the
+                // product-level/default table (or customer/client selling prices).
+                $rows = $raw !== null ? $pricing->normalize(json_decode((string) $raw, true) ?: []) : [];
                 return [
                     'id' => (int) $product->id,
                     'code' => $product->productDisplayCode(),
