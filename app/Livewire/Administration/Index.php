@@ -117,6 +117,7 @@ class Index extends Component
 
     public function openRole(?int $id = null): void
     {
+        $this->resetValidation();
         $this->editingRoleId = $id;
         if ($id) {
             $role = Role::findOrFail($id);
@@ -133,7 +134,11 @@ class Index extends Component
         $this->showRoleModal = true;
     }
 
-    public function closeRole(): void { $this->showRoleModal = false; }
+    public function closeRole(): void
+    {
+        $this->showRoleModal = false;
+        $this->resetValidation();
+    }
 
     public function saveRole(): void
     {
@@ -150,6 +155,10 @@ class Index extends Component
         ], $this->editingRoleId, auth()->user());
         $this->selectedRoleId = $role->id;
         $this->showRoleModal = false;
+        $this->resetValidation();
+        if (!$this->editingRoleId) $this->tab = 'matrix';
+        session()->flash('success', $role->name.($this->editingRoleId ? ' updated.' : ' created. Review its permissions below.'));
+        $this->editingRoleId = null;
     }
 
     public function deleteRole(int $roleId): void

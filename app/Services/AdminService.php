@@ -15,6 +15,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
+use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Validation\ValidationException;
 
 class AdminService
 {
@@ -210,28 +212,92 @@ class AdminService
     public function saveRole(array $data, ?int $id, User $actor): Role
     {
         $this->assertAdministrator($actor);
-        $role = $id ? Role::where('workspace_id', $this->workspaceId())->findOrFail($id) : new Role();
+        $workspaceId = $this->workspaceId();
+        $role = $id ? Role::where('workspace_id', $workspaceId)->findOrFail($id) : new Role();
         abort_if($id && in_array($role->slug, ['super-admin','admin','administrator'], true), 422, 'Administrator role identity is locked.');
+
+        $name = trim((string) $data['name']);
+        $codeInput = trim((string) ($data['code'] ?? ''));
+        $baseSlug = Str::slug($codeInput !== '' ? $codeInput : $name);
+        $roleCode = Str::upper(Str::replace('-', '_', Str::slug($codeInput !== '' ? $codeInput : $name)));
+
+        if ($baseSlug === '' || $roleCode === '') {
+            throw ValidationException::withMessages(['roleCode' => 'Enter a role name or code using letters or numbers.']);
+        }
+        if (Str::length($roleCode) > 80) {
+            throw ValidationException::withMessages(['roleCode' => 'The generated role code cannot exceed 80 characters. Enter a shorter role code.']);
+        }
+
+        if (!$id) {
+            if (in_array($baseSlug, ['super-admin', 'admin', 'administrator'], true)) {
+                throw ValidationException::withMessages(['roleCode' => 'This role code is reserved for administrators.']);
+            }
+
+            // Role slugs have a *global* unique index, although roles belong to a
+            // workspace. Show a helpful conflict for an existing local role; use
+            // a workspace suffix only when another workspace owns the slug.
+            $duplicate = Role::query()->where('workspace_id', $workspaceId)
+                ->where(function ($query) use ($baseSlug, $name, $roleCode) {
+                    $query->where('slug', $baseSlug)
+                        ->orWhere('name', $name)
+                        ->orWhere('code', $roleCode);
+                })->first();
+            if ($duplicate) {
+                throw ValidationException::withMessages([
+                    'roleName' => 'This role already exists in this workspace. Open its Permissions to configure product access instead of creating a duplicate.',
+                ]);
+            }
+
+            $slug = $baseSlug;
+            if (Role::query()->where('slug', $slug)->exists()) {
+                $prefix = Str::substr($baseSlug, 0, 240 - Str::length((string) $workspaceId)).'-ws'.$workspaceId;
+                $slug = $prefix;
+                for ($suffix = 2; Role::query()->where('slug', $slug)->exists(); $suffix++) {
+                    $slug = $prefix.'-'.$suffix;
+                }
+            }
+        }
+
         $role->fill([
-            'workspace_id' => $this->workspaceId(),
-            'name' => trim($data['name']),
-            'slug' => $id ? $role->slug : Str::slug($data['code'] ?: $data['name']),
-            'code' => Str::upper(Str::replace('-', '_', trim($data['code'] ?: $data['name']))),
+            'workspace_id' => $workspaceId,
+            'name' => $name,
+            'slug' => $id ? $role->slug : $slug,
+            'code' => $roleCode,
             'description' => trim((string) ($data['description'] ?? '')) ?: null,
             'default_scope' => in_array(($data['default_scope'] ?? 'assigned_jobs'), ['none','own_records','assigned_jobs','department','all_records'], true)
                 ? ($data['default_scope'] ?? 'assigned_jobs')
                 : 'assigned_jobs',
             'is_system' => $role->is_system ?? false,
             'is_active' => (bool) ($data['is_active'] ?? true),
-        ])->save();
+        ]);
 
-        foreach (AccessControlService::MODULES as $code => $_) {
-            RoleModuleAccess::firstOrCreate(
-                ['role_id' => $role->id, 'module_code' => $code],
-                ['record_scope' => 'none', 'actions' => []],
-            );
+        // A newly created Product Manager can manage the product catalogue and
+        // categories immediately. Do not grant supplier prices, finance, users,
+        // or unrelated workspace permissions. Existing roles stay unchanged.
+        $isProductManager = !$id && (Str::slug($name) === 'product-manager' || $baseSlug === 'product-manager');
+
+        try {
+            DB::transaction(function () use ($role, $id, $actor, $isProductManager): void {
+                $role->save();
+                foreach (AccessControlService::MODULES as $module => $_) {
+                    $productModule = $isProductManager && in_array($module, ['catalog_products', 'product_categories'], true);
+                    RoleModuleAccess::firstOrCreate(
+                        ['role_id' => $role->id, 'module_code' => $module],
+                        [
+                            'record_scope' => $productModule ? 'all_records' : 'none',
+                            'actions' => $productModule ? AccessControlService::supportedActions($module) : [],
+                        ],
+                    );
+                }
+                $this->audit($role, $id ? 'access.role_updated' : 'access.role_created', ($id ? 'Updated role ' : 'Created role ').$role->name, $actor);
+            });
+        } catch (UniqueConstraintViolationException $exception) {
+            // Handles simultaneous submissions / stale forms without leaking SQL.
+            throw ValidationException::withMessages([
+                'roleName' => 'A role with this identifier already exists. Review the existing roles and try another name or code.',
+            ]);
         }
-        $this->audit($role, $id ? 'access.role_updated' : 'access.role_created', ($id ? 'Updated role ' : 'Created role ').$role->name, $actor);
+
         app(AccessControlService::class)->forgetRole((int) $role->id);
         app(WorkspaceRefreshService::class)->touch('role-access');
         return $role->refresh();

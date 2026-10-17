@@ -49,6 +49,14 @@ class AuthController extends Controller
         $request->session()->put('flowtrack_login_token', $token);
         Cache::put('flowtrack:active-login:'.$request->user()->id, $token, now()->addDay());
 
+        // Product-only roles cannot open the management dashboard. Send them
+        // directly to the catalogue instead of a 403 after successful sign-in.
+        // Users who can open Dashboard retain the existing intended redirect.
+        if (! $request->user()->canAccess('dashboard.view')
+            && $request->user()->canModule('catalog_products', 'view')) {
+            return redirect()->route('master-data', ['group' => 'product']);
+        }
+
         return redirect()->intended(route('dashboard'));
     }
 

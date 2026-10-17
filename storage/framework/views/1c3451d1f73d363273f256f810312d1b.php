@@ -55,7 +55,7 @@
     $reportGroupActive = request()->routeIs('reports', 'team-performance.report', 'order-summary.report');
 ?>
 <aside id="sidebar" class="sidebar ft-sidebar-template">
-    <a class="brand ft-system-brand" href="<?php echo e(route('dashboard')); ?>" wire:navigate aria-label="Open Dashboard">
+    <a class="brand ft-system-brand" href="<?php echo e(!$user->canAccess('dashboard.view') && $catalogProductView ? route('master-data', ['group' => 'product']) : route('dashboard')); ?>" wire:navigate aria-label="<?php echo e(!$user->canAccess('dashboard.view') && $catalogProductView ? 'Open Products' : 'Open Dashboard'); ?>">
         <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($branding['logo_url'] ?? null): ?>
             <img class="ft-system-logo" src="<?php echo e($branding['logo_url']); ?>" alt="<?php echo e($branding['name'] ?? 'FlowTrack'); ?>">
         <?php else: ?>

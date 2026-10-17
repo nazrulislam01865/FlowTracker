@@ -462,50 +462,63 @@
 
     @if($showRoleModal)
         <div class="overlay livewire-overlay" wire:click.self="closeRole"></div>
-        <div class="modal livewire-modal" data-ft-feedback-scope="form">
+        <form class="modal livewire-modal" wire:submit="saveRole" data-ft-feedback-scope="form" role="dialog" aria-modal="true" aria-label="{{ $editingRoleId ? 'Edit Role' : 'Create Role' }}">
             <div class="modal-head">
                 <h2>{{ $editingRoleId ? 'Edit Role' : 'Create Role' }}</h2>
-                <button class="close-btn" wire:click="closeRole">×</button>
+                <button type="button" class="close-btn" wire:click="closeRole" aria-label="Close role form">×</button>
             </div>
 
             <div class="modal-body">
                 <div class="form-grid">
                     <div class="field">
-                        <label>Role name *</label>
-                        <input wire:model="roleName">
+                        <label for="ft-role-name">Role name *</label>
+                        <input id="ft-role-name" wire:model="roleName" maxlength="255" required @error('roleName') aria-invalid="true" aria-describedby="ft-role-name-error" @enderror placeholder="e.g. Product Manager">
+                        @error('roleName')<x-ui.validation-message id="ft-role-name-error" :message="$message" />@enderror
                     </div>
                     <div class="field">
-                        <label>Role code</label>
-                        <input wire:model="roleCode" placeholder="JOB_MANAGER">
+                        <label for="ft-role-code">Role code</label>
+                        <input id="ft-role-code" wire:model="roleCode" maxlength="80" @error('roleCode') aria-invalid="true" aria-describedby="ft-role-code-error" @enderror placeholder="e.g. PRODUCT_MANAGER">
+                        @error('roleCode')<x-ui.validation-message id="ft-role-code-error" :message="$message" />@enderror
+                        <small class="muted">Optional. Generated from the name if blank.</small>
                     </div>
                     <div class="field full">
-                        <label>Description</label>
-                        <textarea wire:model="roleDescription" rows="3"></textarea>
+                        <label for="ft-role-description">Description</label>
+                        <textarea id="ft-role-description" wire:model="roleDescription" maxlength="2000" rows="3"></textarea>
+                        @error('roleDescription')<x-ui.validation-message :message="$message" />@enderror
                     </div>
                     <div class="field">
-                        <label>Default record scope</label>
-                        <select wire:model="roleDefaultScope">
+                        <label for="ft-role-scope">Default record scope</label>
+                        <select id="ft-role-scope" wire:model="roleDefaultScope">
                             <option value="none">None</option>
                             <option value="own_records">Own records</option>
                             <option value="assigned_jobs">Assigned Jobs</option>
                             <option value="department">Department</option>
                             <option value="all_records">All records</option>
                         </select>
+                        @error('roleDefaultScope')<x-ui.validation-message :message="$message" />@enderror
                     </div>
                     <div class="field">
-                        <label>Status</label>
-                        <select wire:model="roleActive">
+                        <label for="ft-role-active">Status</label>
+                        <select id="ft-role-active" wire:model="roleActive">
                             <option value="1">Active</option>
                             <option value="0">Inactive</option>
                         </select>
                     </div>
+                    @if(!$editingRoleId)
+                        <div class="field full">
+                            <small class="muted">New Product Manager roles receive Products and Product Categories permissions only. Other roles start without permissions. All permissions can be reviewed in the Permission Matrix after saving.</small>
+                        </div>
+                    @endif
                 </div>
             </div>
 
             <div class="modal-foot">
-                <button class="ghost" wire:click="closeRole">Cancel</button>
-                <button class="primary" wire:click="saveRole">Save Role</button>
+                <button type="button" class="ghost" wire:click="closeRole">Cancel</button>
+                <button type="submit" class="primary" wire:loading.attr="disabled" wire:target="saveRole">
+                    <span wire:loading.remove wire:target="saveRole">{{ $editingRoleId ? 'Save Changes' : 'Create Role' }}</span>
+                    <span wire:loading wire:target="saveRole">Saving…</span>
+                </button>
             </div>
-        </div>
+        </form>
     @endif
 </div>

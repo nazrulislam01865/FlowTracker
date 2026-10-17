@@ -55,7 +55,7 @@
     $reportGroupActive = request()->routeIs('reports', 'team-performance.report', 'order-summary.report');
 @endphp
 <aside id="sidebar" class="sidebar ft-sidebar-template">
-    <a class="brand ft-system-brand" href="{{ route('dashboard') }}" wire:navigate aria-label="Open Dashboard">
+    <a class="brand ft-system-brand" href="{{ !$user->canAccess('dashboard.view') && $catalogProductView ? route('master-data', ['group' => 'product']) : route('dashboard') }}" wire:navigate aria-label="{{ !$user->canAccess('dashboard.view') && $catalogProductView ? 'Open Products' : 'Open Dashboard' }}">
         @if($branding['logo_url'] ?? null)
             <img class="ft-system-logo" src="{{ $branding['logo_url'] }}" alt="{{ $branding['name'] ?? 'FlowTrack' }}">
         @else
