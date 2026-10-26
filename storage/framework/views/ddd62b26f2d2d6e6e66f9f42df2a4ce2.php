@@ -204,7 +204,7 @@ unset($__defined_vars, $__key, $__value); ?>
         class="ft-remote-filter-menu ft-search-select__menu<?php echo e($showAvatar ? ' ft-search-select__menu--people' : ''); ?>"
         data-ft-search-select-context="<?php echo e($context); ?>"
         x-cloak
-        x-bind:style="open ? menuStyle + ';display:flex!important;' : 'display:none!important;'"
+        x-bind:style="open ? menuStyle + ';display:flex!important;' + <?php echo \Illuminate\Support\Js::from($context === 'category-creator' ? ';z-index:1201!important;' : '')->toHtml() ?> : 'display:none!important;'"
         x-on:click.outside="close()"
         x-on:keydown.arrow-down.prevent="moveOption(1)"
         x-on:keydown.arrow-up.prevent="moveOption(-1)"

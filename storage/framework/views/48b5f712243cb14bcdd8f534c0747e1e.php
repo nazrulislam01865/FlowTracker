@@ -177,7 +177,7 @@ unset($__defined_vars, $__key, $__value); ?>
     $emailServiceEnabled = (bool) (($variant === 'invoice_send' ? $invoiceEmailPreview : $emailHandoffPreview)['email_service_enabled'] ?? true);
     if (! $emailServiceEnabled && in_array($variant, ['purchase_order_email', 'artwork_email'], true)) {
         $title = $variant === 'artwork_email' ? 'Complete Artwork Handoff' : 'Complete Purchase Order Handoff';
-        $copy = 'Email sending is currently disabled. Choose the intended recipients, then complete the handoff and send the file manually.';
+        $copy = 'Email sending is currently disabled. Use Complete without email on the task to finish without sending.';
     } elseif (! $emailServiceEnabled && $variant === 'invoice_send') {
         $title = 'Complete Send Invoice';
         $copy = 'Email sending is currently disabled. Confirm the intended recipient and complete the task now; the invoice can be resent from the completed task later.';
@@ -257,7 +257,7 @@ unset($__defined_vars, $__key, $__value); ?>
     }
 ?>
 
-<div class="ft-order-task-document-modal-backdrop" <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'order-workflow-action-modal-'.e($task->id).'-'.e($step).''; ?>wire:key="order-workflow-action-modal-<?php echo e($task->id); ?>-<?php echo e($step); ?>" <?php if($emailPreviewPending): ?> wire:init="loadOrderWorkflowActionEmailPreview" <?php endif; ?>>
+<div class="ft-order-task-document-modal-backdrop <?php echo e(in_array($variant, ['purchase_order_email', 'artwork_email'], true) ? 'ft-order-task-document-modal-backdrop--handoff' : ''); ?>" <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'order-workflow-action-modal-'.e($task->id).'-'.e($step).''; ?>wire:key="order-workflow-action-modal-<?php echo e($task->id); ?>-<?php echo e($step); ?>" <?php if($emailPreviewPending): ?> wire:init="loadOrderWorkflowActionEmailPreview" <?php endif; ?>>
     <section
         class="ft-order-task-document-modal ft-order-workflow-action-modal <?php echo e($isArtworkPreviewModal ? 'ft-order-workflow-action-modal--artwork-preview' : ($modalWide ? 'ft-order-workflow-action-modal--wide' : '')); ?> <?php echo e($usesStableFinanceValidation ? 'ft-order-workflow-action-modal--stable-finance-validation' : ''); ?> <?php echo e(($isArtworkRevisionRequest || $isArtworkCancellationRequest) ? 'ft-order-workflow-action-modal--artwork-revision-request' : ''); ?> <?php echo e($isArtworkCancellationRequest ? 'ft-order-workflow-action-modal--artwork-cancellation-request' : ''); ?>"
         data-ft-feedback-scope="form"
@@ -857,14 +857,14 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
 
                 <?php if (isset($component)) { $__componentOriginal70137674ee97e22e87c5d4188f3bbd58 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal70137674ee97e22e87c5d4188f3bbd58 = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.email.handoff-preview','data' => ['loading' => $emailPreviewPending,'preview' => $emailHandoffPreview,'defaultSubject' => 'Purchase Order ready — '.$orderNumber,'emptyRecipientText' => 'Enter an email address in To to see the final email details.']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.email.handoff-preview','data' => ['loading' => $emailPreviewPending,'preview' => $emailHandoffPreview,'defaultSubject' => 'Purchase Order ready — '.$orderNumber,'emptyRecipientText' => 'Enter a To recipient to send the email, or close this popup and choose Complete without email on the task.']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('email.handoff-preview'); ?>
 <?php if ($component->shouldRender()): ?>
 <?php $__env->startComponent($component->resolveView(), $component->data()); ?>
 <?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
-<?php $component->withAttributes(['loading' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($emailPreviewPending),'preview' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($emailHandoffPreview),'defaultSubject' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute('Purchase Order ready — '.$orderNumber),'emptyRecipientText' => 'Enter an email address in To to see the final email details.']); ?>
+<?php $component->withAttributes(['loading' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($emailPreviewPending),'preview' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($emailHandoffPreview),'defaultSubject' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute('Purchase Order ready — '.$orderNumber),'emptyRecipientText' => 'Enter a To recipient to send the email, or close this popup and choose Complete without email on the task.']); ?>
 <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
 
 <?php echo $__env->renderComponent(); ?>
@@ -1090,14 +1090,14 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
 
                     <?php if (isset($component)) { $__componentOriginal70137674ee97e22e87c5d4188f3bbd58 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal70137674ee97e22e87c5d4188f3bbd58 = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.email.handoff-preview','data' => ['loading' => $emailPreviewPending,'preview' => $emailHandoffPreview,'defaultSubject' => 'Artwork ready — '.$orderNumber,'emptyRecipientText' => 'Enter one or more email addresses in To.']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.email.handoff-preview','data' => ['loading' => $emailPreviewPending,'preview' => $emailHandoffPreview,'defaultSubject' => 'Artwork ready — '.$orderNumber,'emptyRecipientText' => 'Enter a To recipient to send the email, or close this popup and choose Complete without email on the task.']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('email.handoff-preview'); ?>
 <?php if ($component->shouldRender()): ?>
 <?php $__env->startComponent($component->resolveView(), $component->data()); ?>
 <?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
-<?php $component->withAttributes(['loading' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($emailPreviewPending),'preview' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($emailHandoffPreview),'defaultSubject' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute('Artwork ready — '.$orderNumber),'emptyRecipientText' => 'Enter one or more email addresses in To.']); ?>
+<?php $component->withAttributes(['loading' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($emailPreviewPending),'preview' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($emailHandoffPreview),'defaultSubject' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute('Artwork ready — '.$orderNumber),'emptyRecipientText' => 'Enter a To recipient to send the email, or close this popup and choose Complete without email on the task.']); ?>
 <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
 
 <?php echo $__env->renderComponent(); ?>
@@ -1683,16 +1683,15 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
                 <?php elseif($step === 'issue'): ?>
                     <button type="button" class="danger" wire:click="submitOrderWorkflowAction('issue')" wire:loading.attr="disabled" wire:target="submitOrderWorkflowAction">Report Issue</button>
                 <?php elseif($emailFallback && $emailServiceEnabled && in_array($variant, ['purchase_order_email', 'artwork_email'], true)): ?>
-                    <button type="button" class="secondary" wire:click="submitOrderWorkflowAction('confirm')" wire:loading.attr="disabled" wire:target="submitOrderWorkflowAction">Try email again</button>
-                    <button type="button" class="primary" wire:click="completeOrderWorkflowEmailTaskAfterFailure" wire:loading.attr="disabled" wire:target="completeOrderWorkflowEmailTaskAfterFailure">Complete task</button>
+                    <button type="button" class="primary" wire:click="submitOrderWorkflowAction('confirm')" wire:loading.attr="disabled" wire:target="submitOrderWorkflowAction">Send</button>
                 <?php else: ?>
                     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $choices; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $decision => $label): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
                         <?php if($decision === 'cancel_artwork' && $latestArtworkDocuments->count() <= 1): ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?><?php continue; ?><?php endif; ?>
                         <?php
-                            $actionLabel = ! $emailServiceEnabled && in_array($variant, ['purchase_order_email', 'artwork_email', 'invoice_send'], true)
-                                ? 'Complete without email'
-                                : $label;
-                            $actionDisabled = $variant === 'invoice_send' && empty($workflowInvoice);
+                            $isHandoffEmail = in_array($variant, ['purchase_order_email', 'artwork_email'], true);
+                            $actionLabel = $isHandoffEmail ? 'Send' : $label;
+                            $actionDisabled = ($variant === 'invoice_send' && empty($workflowInvoice))
+                                || ($isHandoffEmail && ! $emailServiceEnabled);
                         ?>
                         <button type="button" class="<?php echo e(in_array($decision, ['revise','cancel_artwork','issue'], true) ? 'danger' : 'primary'); ?>" wire:click="submitOrderWorkflowAction('<?php echo e($decision); ?>')" wire:loading.attr="disabled" wire:target="submitOrderWorkflowAction" <?php if($actionDisabled): echo 'disabled'; endif; ?>><?php echo e($actionLabel); ?></button>
                     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>

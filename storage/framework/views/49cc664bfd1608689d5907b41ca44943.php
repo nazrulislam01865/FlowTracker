@@ -467,6 +467,9 @@ unset($__defined_vars, $__key, $__value); ?>
                 <?php else: ?>
                     <button type="button" class="btn small primary" wire:click="openOrderWorkflowAction(<?php echo e($task->id); ?>)" wire:loading.attr="disabled" wire:target="openOrderWorkflowAction(<?php echo e($task->id); ?>)"><?php echo e($workflowActionLabel); ?></button>
                 <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(in_array($automationKey, ['NEW_SEND_PO_ARTWORK', 'ART_SEND_ORDER_TEAM'], true)): ?>
+                    <button type="button" class="btn small" wire:click="completeOrderWorkflowHandoffWithoutEmail(<?php echo e($task->id); ?>)" wire:loading.attr="disabled" wire:target="completeOrderWorkflowHandoffWithoutEmail(<?php echo e($task->id); ?>)">Complete without email</button>
+                <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
             <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
         <?php elseif($mode === 'done'): ?>
             <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($automationKey === 'NEW_UPLOAD_PO' && $canEditTask && ($canUploadDocument || $canLinkDocument)): ?>
