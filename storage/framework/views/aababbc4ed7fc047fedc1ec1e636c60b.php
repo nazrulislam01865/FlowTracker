@@ -126,6 +126,28 @@
 <?php endif; ?>
         <div class="content <?php echo e(request()->routeIs('dashboard', 'team-performance.report') ? 'ft-dashboard-content-shell' : ''); ?> <?php echo e(request()->routeIs('reports') ? 'ft-inquiry-intelligence-content-shell' : ''); ?>">
             <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(session('success') && !request()->routeIs('task-pack.setup','master-data','financial-master-data','profile','inquiries.*','company.setup')): ?><div class="flash"><?php echo e(session('success')); ?></div><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+            <?php if (isset($component)) { $__componentOriginalb332b6fecacc481ca3fbe2a522c86dbf = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginalb332b6fecacc481ca3fbe2a522c86dbf = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.jobs.order-detail.artwork-address-book-notice','data' => ['status' => session('artwork_address_book_notice', '')]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('jobs.order-detail.artwork-address-book-notice'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['status' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute(session('artwork_address_book_notice', ''))]); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginalb332b6fecacc481ca3fbe2a522c86dbf)): ?>
+<?php $attributes = $__attributesOriginalb332b6fecacc481ca3fbe2a522c86dbf; ?>
+<?php unset($__attributesOriginalb332b6fecacc481ca3fbe2a522c86dbf); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginalb332b6fecacc481ca3fbe2a522c86dbf)): ?>
+<?php $component = $__componentOriginalb332b6fecacc481ca3fbe2a522c86dbf; ?>
+<?php unset($__componentOriginalb332b6fecacc481ca3fbe2a522c86dbf); ?>
+<?php endif; ?>
             <?php echo $__env->yieldContent('content'); ?>
         </div>
     </main>

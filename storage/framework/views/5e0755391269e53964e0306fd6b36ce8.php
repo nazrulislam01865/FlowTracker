@@ -1,4 +1,26 @@
 <div <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'order-workflow-workspace-'.e($orderId).''; ?>wire:key="order-workflow-workspace-<?php echo e($orderId); ?>">
+    <?php if (isset($component)) { $__componentOriginalb332b6fecacc481ca3fbe2a522c86dbf = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginalb332b6fecacc481ca3fbe2a522c86dbf = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.jobs.order-detail.artwork-address-book-notice','data' => ['status' => $artworkAddressBookNotice]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('jobs.order-detail.artwork-address-book-notice'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['status' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($artworkAddressBookNotice)]); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginalb332b6fecacc481ca3fbe2a522c86dbf)): ?>
+<?php $attributes = $__attributesOriginalb332b6fecacc481ca3fbe2a522c86dbf; ?>
+<?php unset($__attributesOriginalb332b6fecacc481ca3fbe2a522c86dbf); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginalb332b6fecacc481ca3fbe2a522c86dbf)): ?>
+<?php $component = $__componentOriginalb332b6fecacc481ca3fbe2a522c86dbf; ?>
+<?php unset($__componentOriginalb332b6fecacc481ca3fbe2a522c86dbf); ?>
+<?php endif; ?>
     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(! $ready): ?>
         <?php if (isset($component)) { $__componentOriginal07ce51f35701acdfae5fc6353e53cc20 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal07ce51f35701acdfae5fc6353e53cc20 = $attributes; } ?>
@@ -54,14 +76,14 @@
             <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($workflowActionTask): ?>
                 <?php if (isset($component)) { $__componentOriginal8e43f3521a8e6328e588de4039a01fc1 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal8e43f3521a8e6328e588de4039a01fc1 = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.jobs.order-detail.workflow-action-modal','data' => ['job' => $job,'task' => $workflowActionTask,'config' => $workflowActionModal,'step' => $orderWorkflowActionStep,'payload' => $orderWorkflowActionPayload,'modalPreview' => $orderWorkflowActionModalPreview,'attachment' => $orderWorkflowActionAttachment,'revisionComments' => $orderWorkflowActionRevisionComments,'revisionAttachments' => $orderWorkflowActionRevisionAttachments,'mentionUsers' => $mentionUsers,'emailFallback' => $orderWorkflowEmailFallback,'emailFallbackMessage' => $orderWorkflowEmailFallbackMessage,'emailFallbackAttempts' => $orderWorkflowEmailFallbackAttempts]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.jobs.order-detail.workflow-action-modal','data' => ['job' => $job,'task' => $workflowActionTask,'config' => $workflowActionModal,'step' => $orderWorkflowActionStep,'payload' => $orderWorkflowActionPayload,'artworkRecipientEmails' => $artworkRecipientEmails,'artworkSavedRecipientSuggestions' => $artworkSavedRecipientSuggestions,'modalPreview' => $orderWorkflowActionModalPreview,'attachment' => $orderWorkflowActionAttachment,'revisionComments' => $orderWorkflowActionRevisionComments,'revisionAttachments' => $orderWorkflowActionRevisionAttachments,'mentionUsers' => $mentionUsers,'emailFallback' => $orderWorkflowEmailFallback,'emailFallbackMessage' => $orderWorkflowEmailFallbackMessage,'emailFallbackAttempts' => $orderWorkflowEmailFallbackAttempts]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('jobs.order-detail.workflow-action-modal'); ?>
 <?php if ($component->shouldRender()): ?>
 <?php $__env->startComponent($component->resolveView(), $component->data()); ?>
 <?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
-<?php $component->withAttributes(['job' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($job),'task' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($workflowActionTask),'config' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($workflowActionModal),'step' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($orderWorkflowActionStep),'payload' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($orderWorkflowActionPayload),'modal-preview' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($orderWorkflowActionModalPreview),'attachment' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($orderWorkflowActionAttachment),'revision-comments' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($orderWorkflowActionRevisionComments),'revision-attachments' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($orderWorkflowActionRevisionAttachments),'mention-users' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($mentionUsers),'email-fallback' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($orderWorkflowEmailFallback),'email-fallback-message' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($orderWorkflowEmailFallbackMessage),'email-fallback-attempts' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($orderWorkflowEmailFallbackAttempts)]); ?>
+<?php $component->withAttributes(['job' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($job),'task' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($workflowActionTask),'config' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($workflowActionModal),'step' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($orderWorkflowActionStep),'payload' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($orderWorkflowActionPayload),'artwork-recipient-emails' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($artworkRecipientEmails),'artwork-saved-recipient-suggestions' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($artworkSavedRecipientSuggestions),'modal-preview' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($orderWorkflowActionModalPreview),'attachment' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($orderWorkflowActionAttachment),'revision-comments' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($orderWorkflowActionRevisionComments),'revision-attachments' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($orderWorkflowActionRevisionAttachments),'mention-users' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($mentionUsers),'email-fallback' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($orderWorkflowEmailFallback),'email-fallback-message' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($orderWorkflowEmailFallbackMessage),'email-fallback-attempts' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($orderWorkflowEmailFallbackAttempts)]); ?>
 <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
 
 <?php echo $__env->renderComponent(); ?>

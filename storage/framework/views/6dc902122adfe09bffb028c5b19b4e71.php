@@ -1,4 +1,26 @@
 <div>
+    <?php if (isset($component)) { $__componentOriginalb332b6fecacc481ca3fbe2a522c86dbf = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginalb332b6fecacc481ca3fbe2a522c86dbf = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.jobs.order-detail.artwork-address-book-notice','data' => ['status' => $artworkAddressBookNotice]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('jobs.order-detail.artwork-address-book-notice'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['status' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($artworkAddressBookNotice)]); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginalb332b6fecacc481ca3fbe2a522c86dbf)): ?>
+<?php $attributes = $__attributesOriginalb332b6fecacc481ca3fbe2a522c86dbf; ?>
+<?php unset($__attributesOriginalb332b6fecacc481ca3fbe2a522c86dbf); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginalb332b6fecacc481ca3fbe2a522c86dbf)): ?>
+<?php $component = $__componentOriginalb332b6fecacc481ca3fbe2a522c86dbf; ?>
+<?php unset($__componentOriginalb332b6fecacc481ca3fbe2a522c86dbf); ?>
+<?php endif; ?>
     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($showCreate): ?>
         <?php if (isset($component)) { $__componentOriginal7c9b0b4b1633ac324acaf1481e466cc1 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal7c9b0b4b1633ac324acaf1481e466cc1 = $attributes; } ?>
