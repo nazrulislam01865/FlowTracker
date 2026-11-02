@@ -270,7 +270,14 @@ unset($__defined_vars, $__key, $__value); ?>
     // or horizontally shift the popup after submit.
     $usesStableFinanceValidation = $step === 'main'
         && in_array($variant, ['invoice_prepare', 'payment'], true);
-    $modalWide = in_array($variant, ['courier_label', 'shipment_info', 'invoice_send'], true);
+    $supplierPoGenerated = $variant === 'supplier_po' && !empty($modalPreview['supplier_po']['rows']);
+    if ($variant === 'supplier_po') {
+        $title = $supplierPoGenerated ? 'Send Purchase Order' : 'Create Purchase Order';
+        $copy = $supplierPoGenerated
+            ? 'Review the PDF and email it to the supplier or other recipients.'
+            : 'Select single or split to generate the supplier Purchase Order PDFs.';
+    }
+    $modalWide = in_array($variant, ['courier_label', 'shipment_info', 'invoice_send'], true) || $supplierPoGenerated;
     // Every artwork revision dialog uses the same compact prototype shell.
     // The copy/labels still vary by task, but layout and controls stay consistent.
     $isArtworkRevisionRequest = $step === 'revision';
@@ -716,6 +723,29 @@ endif;
 unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?></label>
                 <div class="ft-prototype-file-placeholder"><strong>Screenshot / photo</strong><span>Supporting images/documents can be added to the task after the issue is recorded.</span></div>
                 <div class="ft-prototype-email-preview"><b>Email preview</b><span>The issue notification will be recorded for <?php echo e($supplierName); ?> with this Order and task.</span></div>
+            <?php elseif($variant === 'supplier_po'): ?>
+                <?php if (isset($component)) { $__componentOriginal65929a320cfb8b435b3e69c42cef87b4 = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal65929a320cfb8b435b3e69c42cef87b4 = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.jobs.order-detail.supplier-purchase-order-panel','data' => ['task' => $task,'payload' => $payload,'preview' => $modalPreview['supplier_po'] ?? []]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('jobs.order-detail.supplier-purchase-order-panel'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['task' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($task),'payload' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($payload),'preview' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($modalPreview['supplier_po'] ?? [])]); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal65929a320cfb8b435b3e69c42cef87b4)): ?>
+<?php $attributes = $__attributesOriginal65929a320cfb8b435b3e69c42cef87b4; ?>
+<?php unset($__attributesOriginal65929a320cfb8b435b3e69c42cef87b4); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal65929a320cfb8b435b3e69c42cef87b4)): ?>
+<?php $component = $__componentOriginal65929a320cfb8b435b3e69c42cef87b4; ?>
+<?php unset($__componentOriginal65929a320cfb8b435b3e69c42cef87b4); ?>
+<?php endif; ?>
             <?php elseif($variant === 'purchase_order_email'): ?>
                 <?php
                     $recipientOptions = collect($emailHandoffPreview['recipient_options'] ?? []);
@@ -1725,7 +1755,7 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
             // Once one of those choices opens a nested revision/issue dialog, the
             // normal footer must return so the user can actually submit it.
             $usesInlineWorkflowActions = $step === 'main'
-                && in_array($variant, ['client_decision','qc_check'], true);
+                && in_array($variant, ['client_decision','qc_check', 'supplier_po'], true);
             $usesShipmentFooter = $step === 'main' && $variant === 'shipment_info';
             $editingCompletedShipmentInformation = $usesShipmentFooter
                 && \App\Support\OrderDetailPresenter::isCompletedTask($task);
