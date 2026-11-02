@@ -85,14 +85,13 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
             </section>
         <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
         <details class="ft-supplier-po-extra">
-            <summary><span><strong>Carton marks &amp; payment details</strong><small>Optional — leave anything unknown blank</small></span><span class="ft-supplier-po-chevron" aria-hidden="true">⌄</span></summary>
+            <summary><span><strong>Carton marks &amp; payment details</strong><small>Optional — complete known details before generating the PO</small></span><span class="ft-supplier-po-chevron" aria-hidden="true">⌄</span></summary>
             <div class="ft-supplier-po-extra-body">
                 <div class="ft-supplier-po-extra-heading"><strong>4. Carton marks requirement</strong><small>These values appear in section 4 of the supplied Excel template.</small></div>
                 <div class="ft-supplier-po-extra-grid">
                     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = ['carton_buyer' => 'Carton buyer', 'carton_style' => 'Style number', 'carton_colour' => 'Colour', 'carton_size' => 'Size', 'carton_gross_weight' => 'Gross weight (kg)', 'carton_net_weight' => 'Net weight (kg)', 'carton_measurement' => 'Carton measurement (cm)', 'carton_other' => 'Other carton notes']; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $field => $label): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
                         <label class="ft-supplier-po-extra-field"><span><?php echo e($label); ?></span><input type="text" maxlength="255" wire:model.blur="orderWorkflowActionPayload.supplier_po_template.<?php echo e($field); ?>" placeholder="Optional"></label>
                     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
-                    <label class="ft-supplier-po-extra-field"><span>Carton mark quantity (PCS)</span><input type="text" maxlength="20" wire:model.blur="orderWorkflowActionPayload.supplier_po_template.carton_qty" placeholder="Leave blank if unknown"></label>
                     <label class="ft-supplier-po-extra-field"><span>Mark type</span><select wire:model="orderWorkflowActionPayload.supplier_po_template.carton_mark_type"><option value="">Not specified</option><option value="side">Side mark only</option><option value="two">Two sides</option><option value="four">Four sides</option><option value="barcode">Barcode mark</option><option value="fragile">Fragile / this side up</option></select></label>
                     <label class="ft-supplier-po-extra-field"><span>Outer carton strength</span><select wire:model="orderWorkflowActionPayload.supplier_po_template.carton_strength"><option value="">Not specified</option><option value="5ply">5-ply</option><option value="3ply">3-ply</option><option value="export">Strong export carton</option></select></label>
                     <label class="ft-supplier-po-extra-field"><span>Inner packing</span><select wire:model="orderWorkflowActionPayload.supplier_po_template.inner_packing"><option value="">Not specified</option><option value="polybag">Polybag per piece</option><option value="tissue">Tissue paper</option><option value="desiccant">Desiccant</option></select></label>
@@ -114,7 +113,7 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
                         <label class="ft-supplier-po-extra-field"><span><?php echo e($label); ?></span><input type="text" maxlength="255" wire:model.blur="orderWorkflowActionPayload.supplier_po_template.<?php echo e($field); ?>" placeholder="Optional"></label>
                     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
                 </div>
-                <p class="ft-supplier-po-extra-hint">The supplied PO template stays unchanged. Unknown carton, payment, and bank details remain blank in the PDF.</p>
+                <p class="ft-supplier-po-extra-hint">The original PO spreadsheet design stays unchanged. Only supplied values are printed in its blank fields.</p>
                 <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['orderWorkflowActionPayload.supplier_po_template'];
 $__bag = $errors->getBag($__errorArgs[1] ?? 'default');
 if ($__bag->has($__errorArgs[0])) :
@@ -189,7 +188,7 @@ Cancel <?php echo $__env->renderComponent(); ?>
 <?php endif; ?>
         </footer>
     <?php else: ?>
-        <div class="ft-supplier-po-ready"><span aria-hidden="true">✓</span><div><strong><?php echo e(count($poRows)); ?> Purchase Order<?php echo e(count($poRows) === 1 ? '' : 's'); ?> ready</strong><small>PDF<?php echo e(count($poRows) === 1 ? '' : 's'); ?> saved under this task. Email is optional; you can complete without sending.</small></div></div>
+        <div class="ft-supplier-po-ready"><span aria-hidden="true">✓</span><div><strong><?php echo e(count($poRows)); ?> Purchase Order<?php echo e(count($poRows) === 1 ? '' : 's'); ?> ready</strong><small>PDF<?php echo e(count($poRows) === 1 ? '' : 's'); ?> saved under this task. Choose a PO to review and email it.</small></div></div>
         <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(count($poRows) > 1): ?>
             <nav class="ft-supplier-po-files" aria-label="Generated Purchase Orders">
                 <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $poRows; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $po): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
@@ -203,7 +202,7 @@ Cancel <?php echo $__env->renderComponent(); ?>
         <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($selectedPo): ?>
             <div class="ft-supplier-po-send" <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'supplier-po-email-'.e($selectedPo['id']).''; ?>wire:key="supplier-po-email-<?php echo e($selectedPo['id']); ?>">
                 <div class="ft-supplier-po-document">
-                    <div class="ft-supplier-po-pdf-preview"><span class="ft-supplier-po-pdf-badge">PDF</span><strong><?php echo e($selectedPo['pdf_name']); ?></strong><small>Purchase Order · <?php echo e($selectedPo['number']); ?></small><span class="ft-supplier-po-pdf-caption"><?php echo e($selectedPo['status'] === 'sent' ? 'Email sent with this PDF attached.' : 'This PDF is attached automatically if you choose Send.'); ?></span></div>
+                    <div class="ft-supplier-po-pdf-preview"><span class="ft-supplier-po-pdf-badge">PDF</span><strong><?php echo e($selectedPo['pdf_name']); ?></strong><small>Purchase Order · <?php echo e($selectedPo['number']); ?></small><span class="ft-supplier-po-pdf-caption">This file will be attached automatically when you send.</span></div>
                     <div class="ft-supplier-po-downloads">
                         <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($selectedPo['document_id']): ?>
                             <a href="<?php echo e(route('documents.open', $selectedPo['document_id'])); ?>" target="_blank" rel="noopener">Open PDF ↗</a>
@@ -214,9 +213,8 @@ Cancel <?php echo $__env->renderComponent(); ?>
                 <div class="ft-supplier-po-email-details">
                     <div class="ft-supplier-po-meta"><div><span>SUPPLIER</span><strong><?php echo e($selectedPo['supplier']); ?></strong></div><div><span>STATUS</span><strong class="<?php echo e($selectedPo['status'] === 'sent' ? 'ft-supplier-po-sent-text' : ''); ?>"><?php echo e($selectedPo['status'] === 'sent' ? 'Sent' : ($selectedPo['status'] === 'failed' ? 'Failed - retry' : 'Not sent')); ?></strong></div></div>
                     <div class="ft-supplier-po-meta ft-supplier-po-items"><div><span>PRODUCTS</span><strong><?php echo e($selectedPo['items']); ?></strong></div></div>
-                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($selectedPo['status'] !== 'sent' && (!$task->completed_at || $selectedPo['status'] === 'failed')): ?>
                     <section class="ft-supplier-po-recipient-section" aria-label="Email recipients">
-                        <strong>To <small>(optional)</small></strong>
+                        <strong>To</strong>
                         <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = (array) ($payload['supplier_po_recipients'][$selectedPo['id']] ?? ['']); $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $recipientKey => $recipientEmail): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
                             <div class="ft-supplier-po-recipient" <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'supplier-po-recipient-'.e($selectedPo['id']).'-'.e($recipientKey).''; ?>wire:key="supplier-po-recipient-<?php echo e($selectedPo['id']); ?>-<?php echo e($recipientKey); ?>">
                                 <input type="email" inputmode="email" maxlength="254" wire:model.blur="orderWorkflowActionPayload.supplier_po_recipients.<?php echo e($selectedPo['id']); ?>.<?php echo e($recipientKey); ?>" value="<?php echo e($recipientEmail); ?>" placeholder="Enter email address" aria-label="Recipient <?php echo e($loop->iteration); ?>" autocomplete="off" autocapitalize="off" spellcheck="false">
@@ -233,16 +231,8 @@ if (isset($__messageOriginal)) { $message = $__messageOriginal; }
 endif;
 unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                     </section>
-                    <?php elseif($selectedPo['status'] === 'sent'): ?>
-                        <p class="ft-supplier-po-delivered" role="status">Email sent successfully<?php echo e($selectedPo['sent_at'] ? ' · '.$selectedPo['sent_at'] : ''); ?>. No resend is needed.</p>
-                    <?php else: ?>
-                        <p class="ft-supplier-po-delivered">This task is completed. The PO PDF is available above.</p>
-                    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                     <div class="ft-supplier-po-message"><span>SUBJECT</span><p><?php echo e($selectedPo['subject']); ?></p><span>EMAIL BODY</span><div class="ft-supplier-po-body"><?php echo e($selectedPo['body']); ?></div></div>
-                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($selectedPo['status'] !== 'sent' && (!$task->completed_at || $selectedPo['status'] === 'failed')): ?>
-                        <div class="ft-supplier-po-send-action">
-                            <small><?php echo e($selectedPo['status'] === 'failed' ? 'Delivery failed. You can retry or complete without email.' : 'Add a recipient to send, or complete without email.'); ?></small>
-                            <?php if (isset($component)) { $__componentOriginala8bb031a483a05f647cb99ed3a469847 = $component; } ?>
+                    <div class="ft-supplier-po-send-action"><small><?php echo e($selectedPo['sent_at'] ? 'Last sent '.$selectedPo['sent_at'] : 'Email will be sent with the PDF attached.'); ?></small><?php if (isset($component)) { $__componentOriginala8bb031a483a05f647cb99ed3a469847 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginala8bb031a483a05f647cb99ed3a469847 = $attributes; } ?>
 <?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.button','data' => ['variant' => 'primary','wire:click' => 'sendSupplierPurchaseOrder('.e($selectedPo['id']).')','wire:loading.attr' => 'disabled','wire:target' => 'sendSupplierPurchaseOrder('.e($selectedPo['id']).')']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('ui.button'); ?>
@@ -253,10 +243,7 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
 <?php endif; ?>
 <?php $component->withAttributes(['variant' => 'primary','wire:click' => 'sendSupplierPurchaseOrder('.e($selectedPo['id']).')','wire:loading.attr' => 'disabled','wire:target' => 'sendSupplierPurchaseOrder('.e($selectedPo['id']).')']); ?>
 <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
-
-                                <span wire:loading.remove wire:target="sendSupplierPurchaseOrder(<?php echo e($selectedPo['id']); ?>)"><?php echo e($selectedPo['status'] === 'failed' ? 'Resend PO' : 'Send PO'); ?></span>
-                                <span wire:loading wire:target="sendSupplierPurchaseOrder(<?php echo e($selectedPo['id']); ?>)">Sending...</span>
-                             <?php echo $__env->renderComponent(); ?>
+<span wire:loading.remove wire:target="sendSupplierPurchaseOrder(<?php echo e($selectedPo['id']); ?>)"><?php echo e($selectedPo['status'] === 'sent' ? 'Resend PO' : 'Send PO'); ?></span><span wire:loading wire:target="sendSupplierPurchaseOrder(<?php echo e($selectedPo['id']); ?>)">Sending...</span> <?php echo $__env->renderComponent(); ?>
 <?php endif; ?>
 <?php if (isset($__attributesOriginala8bb031a483a05f647cb99ed3a469847)): ?>
 <?php $attributes = $__attributesOriginala8bb031a483a05f647cb99ed3a469847; ?>
@@ -265,84 +252,12 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
 <?php if (isset($__componentOriginala8bb031a483a05f647cb99ed3a469847)): ?>
 <?php $component = $__componentOriginala8bb031a483a05f647cb99ed3a469847; ?>
 <?php unset($__componentOriginala8bb031a483a05f647cb99ed3a469847); ?>
-<?php endif; ?>
-                        </div>
-                    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+<?php endif; ?></div>
                 </div>
             </div>
         <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
         <footer class="ft-supplier-po-actions">
-            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(!$task->completed_at): ?>
-                <?php if (isset($component)) { $__componentOriginala8bb031a483a05f647cb99ed3a469847 = $component; } ?>
-<?php if (isset($attributes)) { $__attributesOriginala8bb031a483a05f647cb99ed3a469847 = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.button','data' => ['variant' => 'secondary','wire:click' => 'closeOrderWorkflowAction']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
-<?php $component->withName('ui.button'); ?>
-<?php if ($component->shouldRender()): ?>
-<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
-<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
-<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
-<?php endif; ?>
-<?php $component->withAttributes(['variant' => 'secondary','wire:click' => 'closeOrderWorkflowAction']); ?>
-<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
-Close <?php echo $__env->renderComponent(); ?>
-<?php endif; ?>
-<?php if (isset($__attributesOriginala8bb031a483a05f647cb99ed3a469847)): ?>
-<?php $attributes = $__attributesOriginala8bb031a483a05f647cb99ed3a469847; ?>
-<?php unset($__attributesOriginala8bb031a483a05f647cb99ed3a469847); ?>
-<?php endif; ?>
-<?php if (isset($__componentOriginala8bb031a483a05f647cb99ed3a469847)): ?>
-<?php $component = $__componentOriginala8bb031a483a05f647cb99ed3a469847; ?>
-<?php unset($__componentOriginala8bb031a483a05f647cb99ed3a469847); ?>
-<?php endif; ?>
-                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(count($poRows) > 1 && collect($poRows)->contains(fn (array $po) => in_array($po['status'], ['not_sent', 'failed'], true))): ?>
-                    <?php if (isset($component)) { $__componentOriginala8bb031a483a05f647cb99ed3a469847 = $component; } ?>
-<?php if (isset($attributes)) { $__attributesOriginala8bb031a483a05f647cb99ed3a469847 = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.button','data' => ['variant' => 'secondary','wire:click' => 'sendAllSupplierPurchaseOrders','wire:loading.attr' => 'disabled','wire:target' => 'sendAllSupplierPurchaseOrders']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
-<?php $component->withName('ui.button'); ?>
-<?php if ($component->shouldRender()): ?>
-<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
-<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
-<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
-<?php endif; ?>
-<?php $component->withAttributes(['variant' => 'secondary','wire:click' => 'sendAllSupplierPurchaseOrders','wire:loading.attr' => 'disabled','wire:target' => 'sendAllSupplierPurchaseOrders']); ?>
-<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
-Send all POs <?php echo $__env->renderComponent(); ?>
-<?php endif; ?>
-<?php if (isset($__attributesOriginala8bb031a483a05f647cb99ed3a469847)): ?>
-<?php $attributes = $__attributesOriginala8bb031a483a05f647cb99ed3a469847; ?>
-<?php unset($__attributesOriginala8bb031a483a05f647cb99ed3a469847); ?>
-<?php endif; ?>
-<?php if (isset($__componentOriginala8bb031a483a05f647cb99ed3a469847)): ?>
-<?php $component = $__componentOriginala8bb031a483a05f647cb99ed3a469847; ?>
-<?php unset($__componentOriginala8bb031a483a05f647cb99ed3a469847); ?>
-<?php endif; ?>
-                <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
-                <?php if (isset($component)) { $__componentOriginala8bb031a483a05f647cb99ed3a469847 = $component; } ?>
-<?php if (isset($attributes)) { $__attributesOriginala8bb031a483a05f647cb99ed3a469847 = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.button','data' => ['variant' => 'primary','wire:click' => 'completeSupplierPurchaseOrdersWithoutEmail','wire:loading.attr' => 'disabled','wire:target' => 'completeSupplierPurchaseOrdersWithoutEmail']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
-<?php $component->withName('ui.button'); ?>
-<?php if ($component->shouldRender()): ?>
-<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
-<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
-<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
-<?php endif; ?>
-<?php $component->withAttributes(['variant' => 'primary','wire:click' => 'completeSupplierPurchaseOrdersWithoutEmail','wire:loading.attr' => 'disabled','wire:target' => 'completeSupplierPurchaseOrdersWithoutEmail']); ?>
-<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
-
-                    <span wire:loading.remove wire:target="completeSupplierPurchaseOrdersWithoutEmail"><?php echo e(collect($poRows)->contains(fn (array $po) => $po['status'] === 'sent') ? 'Complete (skip remaining emails)' : 'Complete without email'); ?></span>
-                    <span wire:loading wire:target="completeSupplierPurchaseOrdersWithoutEmail">Completing...</span>
-                 <?php echo $__env->renderComponent(); ?>
-<?php endif; ?>
-<?php if (isset($__attributesOriginala8bb031a483a05f647cb99ed3a469847)): ?>
-<?php $attributes = $__attributesOriginala8bb031a483a05f647cb99ed3a469847; ?>
-<?php unset($__attributesOriginala8bb031a483a05f647cb99ed3a469847); ?>
-<?php endif; ?>
-<?php if (isset($__componentOriginala8bb031a483a05f647cb99ed3a469847)): ?>
-<?php $component = $__componentOriginala8bb031a483a05f647cb99ed3a469847; ?>
-<?php unset($__componentOriginala8bb031a483a05f647cb99ed3a469847); ?>
-<?php endif; ?>
-            <?php else: ?>
-                <?php if (isset($component)) { $__componentOriginala8bb031a483a05f647cb99ed3a469847 = $component; } ?>
+            <?php if (isset($component)) { $__componentOriginala8bb031a483a05f647cb99ed3a469847 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginala8bb031a483a05f647cb99ed3a469847 = $attributes; } ?>
 <?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.button','data' => ['variant' => 'secondary','wire:click' => 'closeOrderWorkflowAction']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('ui.button'); ?>
@@ -354,6 +269,28 @@ Send all POs <?php echo $__env->renderComponent(); ?>
 <?php $component->withAttributes(['variant' => 'secondary','wire:click' => 'closeOrderWorkflowAction']); ?>
 <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
 Done <?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginala8bb031a483a05f647cb99ed3a469847)): ?>
+<?php $attributes = $__attributesOriginala8bb031a483a05f647cb99ed3a469847; ?>
+<?php unset($__attributesOriginala8bb031a483a05f647cb99ed3a469847); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginala8bb031a483a05f647cb99ed3a469847)): ?>
+<?php $component = $__componentOriginala8bb031a483a05f647cb99ed3a469847; ?>
+<?php unset($__componentOriginala8bb031a483a05f647cb99ed3a469847); ?>
+<?php endif; ?>
+            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(count($poRows) > 1 && collect($poRows)->contains(fn (array $po) => $po['status'] !== 'sent')): ?>
+                <?php if (isset($component)) { $__componentOriginala8bb031a483a05f647cb99ed3a469847 = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginala8bb031a483a05f647cb99ed3a469847 = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.button','data' => ['variant' => 'primary','wire:click' => 'sendAllSupplierPurchaseOrders','wire:loading.attr' => 'disabled','wire:target' => 'sendAllSupplierPurchaseOrders']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('ui.button'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['variant' => 'primary','wire:click' => 'sendAllSupplierPurchaseOrders','wire:loading.attr' => 'disabled','wire:target' => 'sendAllSupplierPurchaseOrders']); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+Send all unsent POs <?php echo $__env->renderComponent(); ?>
 <?php endif; ?>
 <?php if (isset($__attributesOriginala8bb031a483a05f647cb99ed3a469847)): ?>
 <?php $attributes = $__attributesOriginala8bb031a483a05f647cb99ed3a469847; ?>
