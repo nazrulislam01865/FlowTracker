@@ -53,6 +53,7 @@ unset($__defined_vars, $__key, $__value); ?>
         );
     }
     $taskDocuments = $taskDocuments->sortByDesc('created_at')->values();
+    $archivedSupplierPoDocuments = $taskDocuments->where('category', 'Archived Supplier Purchase Order')->values();
     $taskLinks = \App\Support\JobDetailPresenter::taskLinks($job, $task);
     $automationKey = app(\App\Services\OrderWorkflowActionService::class)->automationKey($task);
     $isArtworkUploadTask = $automationKey === 'ART_PREPARE_UPLOAD';
@@ -61,6 +62,7 @@ unset($__defined_vars, $__key, $__value); ?>
     // latest marker and document actions.
     $isPurchaseOrderUploadTask = $automationKey === 'NEW_UPLOAD_PO';
     $isSupplierPoTask = $automationKey === 'ART_CREATE_SUPPLIER_PO';
+    $currentTaskDocuments = $isSupplierPoTask ? $taskDocuments->where('category', '!=', 'Archived Supplier Purchase Order')->values() : $taskDocuments;
     $isProductionEstimatedDeliveryTask = $automationKey === 'PROD_SET_ESTIMATED_DELIVERY';
     $isProductionMonitorTask = $automationKey === 'PROD_ISSUE';
     $isRegularOptionalTask = \App\Support\OrderTaskRequirement::isRegularOptional($task);
@@ -87,7 +89,7 @@ unset($__defined_vars, $__key, $__value); ?>
     $latestArtworkDocument = $latestArtworkDocuments->last();
     $resourceDocuments = $isArtworkUploadTask
         ? $latestArtworkDocuments
-        : $taskDocuments
+        : $currentTaskDocuments
             ->reject(fn ($document) => $revisionReferenceDocumentIds->contains((int) $document->id))
             ->values();
     $isCurrentPhase = (int) $task->workflow_phase_id === (int) $job->workflow_phase_id;
@@ -141,6 +143,7 @@ unset($__defined_vars, $__key, $__value); ?>
     $requiredBeforeCompletion = (bool) ($task->setupTemplate?->document_required_before_completion ?? false);
     $workflowAction = data_get($context, 'taskActions.'.(int) $task->id, []);
     $workflowActionLabel = (string) ($workflowAction['label'] ?? 'Take action');
+    if ($isSupplierPoTask && $currentTaskDocuments->isNotEmpty()) $workflowActionLabel = 'Review POs';
     $workflowActionType = (string) ($workflowAction['type'] ?? 'workflow');
     $workflowEmailStatus = (array) data_get($context, 'workflowEmailStatuses.'.(int) $task->id, []);
     $workflowInvoice = (array) data_get($context, 'workflowInvoices.'.(int) $task->id, []);
@@ -392,8 +395,8 @@ unset($__defined_vars, $__key, $__value); ?>
             <div class="card-sub">
                 📎 <?php echo e($workflowInvoiceDisplayName); ?> · Latest
             </div>
-        <?php elseif($taskDocuments->isNotEmpty()): ?>
-            <?php $latestTaskDocument = $isArtworkUploadTask ? $latestArtworkDocument : $taskDocuments->first(); ?>
+        <?php elseif($currentTaskDocuments->isNotEmpty()): ?>
+            <?php $latestTaskDocument = $isArtworkUploadTask ? $latestArtworkDocument : $currentTaskDocuments->first(); ?>
             <div class="card-sub">
                 📎 <?php echo e($latestTaskDocument->name); ?>
 
@@ -403,8 +406,8 @@ unset($__defined_vars, $__key, $__value); ?>
                         · +<?php echo e($latestArtworkDocuments->count() - 1); ?> file<?php echo e($latestArtworkDocuments->count() === 2 ? '' : 's'); ?>
 
                     <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
-                <?php elseif($taskDocuments->count() > 1): ?>
-                    +<?php echo e($taskDocuments->count() - 1); ?>
+                <?php elseif($currentTaskDocuments->count() > 1): ?>
+                    +<?php echo e($currentTaskDocuments->count() - 1); ?>
 
                 <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
             </div>
@@ -474,7 +477,7 @@ unset($__defined_vars, $__key, $__value); ?>
             <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
         <?php elseif($mode === 'done'): ?>
             <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($isSupplierPoTask && $canEditTask && !$orderOnHold): ?>
-                <button type="button" class="btn small primary" wire:click="openGeneratedSupplierPurchaseOrders(<?php echo e($task->id); ?>)">View / Send PO</button>
+                <button type="button" class="btn small primary" wire:click="openGeneratedSupplierPurchaseOrders(<?php echo e($task->id); ?>)">View POs</button>
                 <button type="button" class="btn small" wire:click="viewTask(<?php echo e($task->id); ?>)">View</button>
             <?php elseif($automationKey === 'NEW_UPLOAD_PO' && $canEditTask && ($canUploadDocument || $canLinkDocument)): ?>
                 <button type="button" class="btn small" wire:click="openOverviewTaskDocumentModal(<?php echo e($task->id); ?>)">Add other documents</button>
@@ -665,7 +668,7 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
                     <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                     <a href="<?php echo e(route('documents.open', $document)); ?>" target="_blank" rel="noopener">Open</a>
                     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canExportDocument): ?><a href="<?php echo e(route('documents.download', $document)); ?>">Download</a><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
-                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canDeleteDocument && $document->category !== 'Supplier Purchase Order'): ?><button type="button" wire:click="deleteJobDocument(<?php echo e($document->id); ?>)" wire:confirm="Delete this document link?">×</button><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canDeleteDocument && !in_array($document->category, ['Supplier Purchase Order', 'Archived Supplier Purchase Order'], true)): ?><button type="button" wire:click="deleteJobDocument(<?php echo e($document->id); ?>)" wire:confirm="Delete this document link?">×</button><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                 </span>
             </div>
         <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
@@ -673,5 +676,42 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
             <div <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'order-task-link-'.e($link->id).''; ?>wire:key="order-task-link-<?php echo e($link->id); ?>"><span class="file-icon link ft-order-file-icon">↗</span><span><b><?php echo e(\Illuminate\Support\Str::limit($link->url, 90)); ?></b><small><?php echo e($link->created_at ? \App\Support\UserLocalTime::format($link->created_at, 'M j, Y, g:i A') : '—'); ?></small></span><span><a href="<?php echo e($link->url); ?>" target="_blank" rel="noopener noreferrer">Open ↗</a><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canEditTask): ?><button type="button" wire:click="deleteOverviewTaskLink(<?php echo e($task->id); ?>, <?php echo e($link->id); ?>)" wire:confirm="Remove this link?">×</button><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?></span></div>
         <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
     </div>
+<?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+
+<?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($isSupplierPoTask && $archivedSupplierPoDocuments->isNotEmpty()): ?>
+    <details class="task-resources ft-order-task-resources ft-supplier-po-archives">
+        <summary>Archived Purchase Orders (<?php echo e($archivedSupplierPoDocuments->count()); ?>)</summary>
+        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $archivedSupplierPoDocuments; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $document): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
+            <div <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'archived-supplier-po-'.e($document->id).''; ?>wire:key="archived-supplier-po-<?php echo e($document->id); ?>" class="ft-order-task-resource-row">
+                <?php if (isset($component)) { $__componentOriginal8cc2d9c978b2c497e659881c0713db1b = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal8cc2d9c978b2c497e659881c0713db1b = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.file-type-badge','data' => ['name' => $document->name,'class' => 'ft-order-file-icon']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('ui.file-type-badge'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['name' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($document->name),'class' => 'ft-order-file-icon']); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal8cc2d9c978b2c497e659881c0713db1b)): ?>
+<?php $attributes = $__attributesOriginal8cc2d9c978b2c497e659881c0713db1b; ?>
+<?php unset($__attributesOriginal8cc2d9c978b2c497e659881c0713db1b); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal8cc2d9c978b2c497e659881c0713db1b)): ?>
+<?php $component = $__componentOriginal8cc2d9c978b2c497e659881c0713db1b; ?>
+<?php unset($__componentOriginal8cc2d9c978b2c497e659881c0713db1b); ?>
+<?php endif; ?>
+                <span><b><?php echo e($document->name); ?></b><small>Previous artwork version · Archived</small></span>
+                <span class="ft-order-task-resource-actions">
+                    <a href="<?php echo e(route('documents.open', $document)); ?>" target="_blank" rel="noopener">Open</a>
+                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canExportDocument): ?><a href="<?php echo e(route('documents.download', $document)); ?>">Download</a><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                </span>
+            </div>
+        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
+    </details>
 <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
 <?php /**PATH /Applications/XAMPP/xamppfiles/htdocs/laravel/FlowTracker/resources/views/components/jobs/order-detail/task-row.blade.php ENDPATH**/ ?>

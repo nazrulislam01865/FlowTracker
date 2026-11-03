@@ -316,6 +316,9 @@ unset($__defined_vars, $__key, $__value); ?>
 <div
     <?php echo e($attributes->class('ft-job-detail-page ft-order-prototype-detail ft-detail-products-scope')); ?>
 
+    data-flowtrack-order-id="<?php echo e($job->id); ?>"
+    data-flowtrack-workspace-id="<?php echo e((int) config('flowtrack.workspace_id', 1)); ?>"
+    data-flowtrack-order-targeted="<?php echo e(config('flowtrack.order_targeted_events_enabled') ? '1' : '0'); ?>"
     x-data="Object.assign(window.FlowTrack.ui.orderHoldGuard({ held: <?php echo \Illuminate\Support\Js::from($orderIsOnHold)->toHtml() ?> }), { redoNotice: '', redoNoticeOpen: false, showRedoNotice(message) { this.redoNotice = message; this.redoNoticeOpen = true; clearTimeout(this.__redoNoticeTimer); this.__redoNoticeTimer = setTimeout(() => this.redoNoticeOpen = false, 2600); } })"
     x-on:order-redo-notice.window="showRedoNotice($event.detail.message ?? 'Redo update saved.')"
     x-on:flowtrack:order-held-blocked.window="showHoldBlocked($event.detail?.action ?? '')"

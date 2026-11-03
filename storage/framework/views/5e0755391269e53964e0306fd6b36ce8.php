@@ -1,4 +1,4 @@
-<div <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'order-workflow-workspace-'.e($orderId).''; ?>wire:key="order-workflow-workspace-<?php echo e($orderId); ?>">
+<div <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'order-workflow-workspace-'.e($orderId).''; ?>wire:key="order-workflow-workspace-<?php echo e($orderId); ?>" data-flowtrack-order-section="workflow" data-flowtrack-section-ready="<?php echo e($ready ? '1' : '0'); ?>">
     <?php if (isset($component)) { $__componentOriginalb332b6fecacc481ca3fbe2a522c86dbf = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginalb332b6fecacc481ca3fbe2a522c86dbf = $attributes; } ?>
 <?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.jobs.order-detail.artwork-address-book-notice','data' => ['status' => $artworkAddressBookNotice]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>

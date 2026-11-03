@@ -1,4 +1,4 @@
-<div <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'order-products-workspace-'.e($orderId).''; ?>wire:key="order-products-workspace-<?php echo e($orderId); ?>">
+<div <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'order-products-workspace-'.e($orderId).''; ?>wire:key="order-products-workspace-<?php echo e($orderId); ?>" data-flowtrack-order-section="products" data-flowtrack-section-ready="<?php echo e($ready ? '1' : '0'); ?>">
     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(! $ready): ?>
         <?php if (isset($component)) { $__componentOriginal07ce51f35701acdfae5fc6353e53cc20 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal07ce51f35701acdfae5fc6353e53cc20 = $attributes; } ?>
