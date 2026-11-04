@@ -1,0 +1,1 @@
+<x-catalog.product-document-card title="Certificate & Test Report" :document="$document" />
