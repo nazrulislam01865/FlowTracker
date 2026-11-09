@@ -62,6 +62,9 @@ final class OrderWorkflowSection extends Component
     public string $detailTab = 'overview';
     public array $expandedPhaseIds = [];
     public ?int $overviewPhaseId = null;
+    // Only the opened task needs complete document/link metadata. This public
+    // ID is never trusted as authorization; the action verifies task scope.
+    public ?int $expandedResourceTaskId = null;
     public ?int $lastOverviewWorkflowPhaseId = null;
     public ?string $focusComment = null;
 
@@ -215,6 +218,42 @@ final class OrderWorkflowSection extends Component
         abort_if((int) $phase->sequence > (int) ($job->phase?->sequence ?? 0), 422, 'Complete the current stage before opening a future stage.');
 
         $this->overviewPhaseId = (int) $phase->id;
+        $this->expandedResourceTaskId = null;
+    }
+
+    public function toggleTaskResources(int $taskId): void
+    {
+        abort_unless($this->ready && (bool) config('flowtrack.order_three_level_loading_enabled', false), 404);
+        $viewer = auth()->user();
+        abort_unless($viewer instanceof User, 403);
+        $order = app(VisibleOrderQuery::class)->base($viewer, $this->orderId);
+        $phaseId = (int) ($this->overviewPhaseId ?: $order->workflow_phase_id);
+        // Livewire public state can be changed by the client. Enforce the same
+        // published/historical phase and future-stage restrictions as the
+        // existing selectOverviewPhase() action before reading file metadata.
+        $published = ! $order->completed_at
+            && ! in_array((string) $order->status, \App\Services\JobService::INACTIVE_STATUSES, true)
+            && app(\App\Services\OrderWorkflowSetupService::class)
+                ->isActiveOrderWorkflow((int) $order->workflow_id);
+        $phase = \App\Models\WorkflowPhase::query()
+            ->whereKey($phaseId)
+            ->when($published,
+                fn ($query) => $query->where('workflow_template_id', (int) $order->workflow_id),
+                fn ($query) => $query->where('workflow_id', (int) $order->workflow_id))
+            ->firstOrFail();
+        $currentSequence = (int) \App\Models\WorkflowPhase::query()
+            ->whereKey((int) $order->workflow_phase_id)->value('sequence');
+        abort_if((int) $phase->sequence > $currentSequence, 422,
+            'Complete the current stage before opening a future stage.');
+
+        $taskQuery = \App\Models\Task::query()
+            ->where('flow_job_id', $this->orderId)
+            ->where('workflow_phase_id', $phaseId)
+            ->whereKey($taskId);
+        app(AccessControlService::class)->applyTaskScope($taskQuery, $viewer);
+        abort_unless($taskQuery->exists(), 404);
+
+        $this->expandedResourceTaskId = $this->expandedResourceTaskId === $taskId ? null : $taskId;
     }
 
     // Task-detail navigation belongs to the parent route, not this isolated
@@ -282,6 +321,8 @@ final class OrderWorkflowSection extends Component
                 (int) ($this->overviewPhaseId ?: $job->workflow_phase_id),
                 $this->showOverviewTaskDocumentModal || $this->showShipmentModal,
                 $this->showOrderWorkflowActionModal ? (int) ($this->orderWorkflowActionTaskId ?: 0) : 0,
+                (bool) config('flowtrack.order_three_level_loading_enabled', false)
+                    ? (int) ($this->expandedResourceTaskId ?: 0) : 0,
             );
         }
         OrderBaselineRecorder::measure('workflow_load_relations',
@@ -291,6 +332,13 @@ final class OrderWorkflowSection extends Component
         $selectedPhase = $job->workflow?->phases?->firstWhere('id', (int) ($this->overviewPhaseId ?: 0));
         if (! $selectedPhase || (int) $selectedPhase->sequence > (int) ($job->phase?->sequence ?? 0)) {
             $this->overviewPhaseId = $currentPhaseId;
+        }
+        // A refresh or auto-advance can move the current phase while a task's
+        // file list is open. Never let a prior phase keep resource hydration.
+        if ($this->expandedResourceTaskId && ! $job->tasks->contains(fn ($task): bool =>
+            (int) $task->id === $this->expandedResourceTaskId
+            && (int) $task->workflow_phase_id === (int) $this->overviewPhaseId)) {
+            $this->expandedResourceTaskId = null;
         }
         $this->lastOverviewWorkflowPhaseId = $currentPhaseId ?: $this->lastOverviewWorkflowPhaseId;
 
@@ -378,6 +426,42 @@ final class OrderWorkflowSection extends Component
                 ->values()
                 ->all()
             : [];
+        if ((bool) config('flowtrack.order_three_level_loading_enabled', false)) {
+            // Legacy/historical and evidence-sensitive phases retain their
+            // original inline files. Do not add counting queries to those paths.
+            $deferred = (bool) config('flowtrack.workflow_display_query_enabled', false)
+                && app(\App\Queries\Orders\OrderWorkflowDisplayQuery::class)
+                    ->resourceDetailsDeferred($job);
+            $context['taskResourceDetailsDeferred'] = $deferred;
+            if ($deferred) {
+                // Two grouped queries for the selected phase, never N+1.
+                // File names and uploader data remain absent until a task opens.
+                $selectedTaskIds = $job->tasks
+                    ->where('workflow_phase_id', (int) $this->overviewPhaseId)
+                    ->pluck('id')
+                    ->map(fn ($id): int => (int) $id)->all();
+                $context['taskLinkCounts'] = empty($selectedTaskIds) ? []
+                    : \App\Models\TaskLink::query()
+                        ->whereIn('task_id', $selectedTaskIds)
+                        ->selectRaw('task_id, COUNT(*) AS link_count')
+                        ->groupBy('task_id')
+                        ->pluck('link_count', 'task_id')
+                        ->all();
+                $context['taskAttachmentCounts'] = empty($selectedTaskIds) ? []
+                    : \App\Models\Document::query()
+                        ->where('flow_job_id', $this->orderId)
+                        ->whereIn('task_id', $selectedTaskIds)
+                        ->when(! (bool) config('flowtrack.order_tracking_enabled', false),
+                            fn ($query) => $query->where(fn ($scope) => $scope
+                                ->whereNull('category')
+                                ->orWhere('category', '!=', \App\Models\Document::CATEGORY_ARTWORK_TRACKING_PDF)))
+                        ->selectRaw('task_id, COUNT(*) AS attachment_count')
+                        ->groupBy('task_id')
+                        ->pluck('attachment_count', 'task_id')
+                        ->all();
+                $context['expandedResourceTaskId'] = $this->expandedResourceTaskId;
+            }
+        }
         $context['workflowEmailResendFeedback'] = $this->orderWorkflowEmailResendFeedback;
 
         $overviewTaskDocumentModalTask = null;

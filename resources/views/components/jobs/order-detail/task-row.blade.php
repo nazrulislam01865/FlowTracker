@@ -18,6 +18,11 @@
     $canLinkDocument = $documentLinkPermission && ! $orderOnHold;
     $canDeleteDocument = $documentDeletePermission && ! $orderOnHold;
     $canExportDocument = (bool) ($context['canExportDocument'] ?? false);
+    $deferredResourceDetails = (bool) ($context['taskResourceDetailsDeferred'] ?? false);
+    $visibleFileCount = max(0, (int) data_get($context, 'taskAttachmentCounts.'.(int) $task->id, 0));
+    $visibleLinkCount = max(0, (int) data_get($context, 'taskLinkCounts.'.(int) $task->id, 0));
+    $resourceDetailsOpen = (int) ($context['expandedResourceTaskId'] ?? 0) === (int) $task->id;
+
     $taskDocuments = (bool) config('flowtrack.workflow_display_query_enabled', false)
         ? (app(\App\Queries\Orders\OrderWorkflowDisplayQuery::class)->documentsForTask($job, (int) $task->id)
             ?? $job->documents->where('task_id', $task->id))
@@ -261,6 +266,8 @@
             <div class="card-sub">
                 📎 {{ $workflowInvoiceDisplayName }} · Latest
             </div>
+        @elseif($deferredResourceDetails)
+            <div class="card-sub">📎 {{ $visibleFileCount }} file{{ $visibleFileCount === 1 ? '' : 's' }}@if($visibleLinkCount > 0) · {{ $visibleLinkCount }} link{{ $visibleLinkCount === 1 ? '' : 's' }}@endif</div>
         @elseif($currentTaskDocuments->isNotEmpty())
             @php $latestTaskDocument = $isArtworkUploadTask ? $latestArtworkDocument : $currentTaskDocuments->first(); @endphp
             <div class="card-sub">
@@ -371,6 +378,15 @@
     @endif
 </article>
 
+@if($deferredResourceDetails && ($visibleFileCount > 0 || $visibleLinkCount > 0))
+    <button type="button" class="btn small ft-order-task-resource-toggle"
+        wire:click="toggleTaskResources({{ (int) $task->id }})"
+        wire:loading.attr="disabled" wire:target="toggleTaskResources({{ (int) $task->id }})"
+        aria-expanded="{{ $resourceDetailsOpen ? 'true' : 'false' }}"
+        aria-controls="order-task-resources-{{ (int) $task->id }}"
+    >{{ $resourceDetailsOpen ? 'Hide files' : 'View files' }} ({{ $visibleFileCount + $visibleLinkCount }})</button>
+@endif
+
 @if((int) $overviewTaskLinkFormTaskId === (int) $task->id && $canEditTask)
     <form class="task-link-form ft-order-task-link-form" wire:submit.prevent="saveOverviewTaskLink({{ $task->id }})" wire:key="order-task-link-form-{{ $task->id }}">
         <input type="url" wire:model="overviewTaskLinkUrl" placeholder="Paste external document link..." autocomplete="url">
@@ -387,7 +403,7 @@
 @endforeach
 
 @if($workflowInvoiceId > 0 || $resourceDocuments->isNotEmpty() || $taskLinks->isNotEmpty())
-    <div class="task-resources ft-order-task-resources">
+    <div id="order-task-resources-{{ (int) $task->id }}" class="task-resources ft-order-task-resources">
         @if($workflowInvoiceId > 0)
             <div
                 wire:key="order-task-invoice-{{ $task->id }}-{{ $workflowInvoiceId }}"
@@ -417,6 +433,7 @@
                     <b>{{ $document->name }}</b>
                     <small>
                         {{ $document->uploader?->name ?? 'FlowTrack' }} · {{ \App\Support\UserLocalTime::format($document->created_at, 'M j, Y, g:i A') }}
+                        @if($deferredResourceDetails && filled($document->version)) · Version {{ $document->version }} @endif
                         @if($isArtworkUploadTask || $isPurchaseOrderUploadTask) · Latest version @endif
                     </small>
                 </span>

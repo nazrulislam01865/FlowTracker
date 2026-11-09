@@ -26,6 +26,13 @@ return [
     // Independent writer/read controls: migrate and backfill before serving snapshots.
     'workflow_read_snapshot_writes_enabled' => (bool) env('FLOWTRACK_WORKFLOW_READ_SNAPSHOT_WRITES_ENABLED', false),
     'workflow_read_snapshot_enabled' => (bool) env('FLOWTRACK_WORKFLOW_READ_SNAPSHOT_ENABLED', false),
+    // Opt-in three-level Order Details read/presentation. OFF preserves the
+    // current progressive Workflow child and inline task resource listing.
+    'order_three_level_loading_enabled' => (bool) env('FLOWTRACK_ORDER_THREE_LEVEL_LOADING_ENABLED', false),
+
+    // Task 2: freeze workflow/phase/Task Pack definitions only for newly created
+    // Orders. Existing Orders and all Part 1 loading remain unchanged.
+    'order_template_version_isolation_enabled' => (bool) env('FLOWTRACK_ORDER_TEMPLATE_VERSION_ISOLATION_ENABLED', false),
 
     // Release B: conservative, one-query guard for a known incomplete required
     // current-phase task. Disabled until matched staging tests are signed off.

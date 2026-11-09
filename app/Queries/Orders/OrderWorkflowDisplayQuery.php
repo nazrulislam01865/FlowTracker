@@ -30,13 +30,17 @@ final class OrderWorkflowDisplayQuery
     /** @var WeakMap<FlowJob, array{source: Collection, count: int, projection: WorkflowDisplayProjection, phaseTasks: array<int, Collection>, documentSource: ?Collection, documentCount: int, documentsByTask: Collection}> */
     private WeakMap $loaded;
 
-    /** @var WeakMap<FlowJob, array{phase: int, fullDocuments: bool, modalTaskId: int}> */
+    /** @var WeakMap<FlowJob, array{phase: int, fullDocuments: bool, modalTaskId: int, resourceTaskId: int}> */
     private WeakMap $displayPreferences;
+
+    /** @var WeakMap<FlowJob, bool> */
+    private WeakMap $resourceDeferral;
 
     public function __construct(private readonly AccessControlService $access)
     {
         $this->loaded = new WeakMap();
         $this->displayPreferences = new WeakMap();
+        $this->resourceDeferral = new WeakMap();
     }
 
     /**
@@ -44,23 +48,35 @@ final class OrderWorkflowDisplayQuery
      * may refer to documents from other phases, so retain the full document
      * collection while any workflow/document action modal is open.
      */
-    public function preferDisplayPhase(FlowJob $order, int $phaseId, bool $fullDocuments = false, int $modalTaskId = 0): void
+    public function preferDisplayPhase(FlowJob $order, int $phaseId, bool $fullDocuments = false, int $modalTaskId = 0, int $resourceTaskId = 0): void
     {
         $this->displayPreferences[$order] = [
             'phase' => $phaseId,
             'fullDocuments' => $fullDocuments,
             'modalTaskId' => max(0, $modalTaskId),
+            'resourceTaskId' => max(0, $resourceTaskId),
         ];
     }
 
-    /** @return array{phase: int, fullDocuments: bool, modalTaskId: int} */
+    /** @return array{phase: int, fullDocuments: bool, modalTaskId: int, resourceTaskId: int} */
     public function displayPreference(FlowJob $order): array
     {
         return $this->displayPreferences[$order] ?? [
             'phase' => (int) $order->workflow_phase_id,
             'fullDocuments' => true,
             'modalTaskId' => 0,
+            'resourceTaskId' => 0,
         ];
+    }
+
+    public function setResourceDetailsDeferred(FlowJob $order, bool $deferred): void
+    {
+        $this->resourceDeferral[$order] = $deferred;
+    }
+
+    public function resourceDetailsDeferred(FlowJob $order): bool
+    {
+        return $this->resourceDeferral[$order] ?? false;
     }
 
     /**

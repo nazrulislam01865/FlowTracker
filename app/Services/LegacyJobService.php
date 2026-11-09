@@ -1130,6 +1130,19 @@ class LegacyJobService
         $isPublishedOrderWorkflow = ! $job->completed_at
             && ! in_array((string) $job->status, self::INACTIVE_STATUSES, true)
             && app(OrderWorkflowSetupService::class)->isActiveOrderWorkflow((int) $job->workflow_id);
+        // New Orders with an immutable per-Order definition still use the
+        // existing bounded task-card reader and Part 1 lazy resource loading.
+        // Ordinary Orders incur no additional lookup.
+        $isFrozenOrderWorkflow = (bool) config('flowtrack.order_template_version_isolation_enabled', false)
+            && ! $isPublishedOrderWorkflow
+            && (int) ($job->source_workflow_id ?: 0) > 0
+            && (int) $job->workflow_id !== (int) $job->source_workflow_id
+            && Workflow::query()->whereKey((int) $job->workflow_id)
+                ->where('is_snapshot', true)
+                ->where('source_workflow_id', (int) $job->source_workflow_id)
+                ->exists()
+            && app(OrderWorkflowSetupService::class)
+                ->isOrderWorkflow((int) $job->source_workflow_id);
 
         // Active Orders always replace legacy Workflow::phases with the exact
         // published WorkflowTemplate phases below. Loading the legacy phase/task
@@ -1143,7 +1156,7 @@ class LegacyJobService
         // Gate the new read-only phase/task projection. The complete legacy
         // graph remains the rollback path for historical and incomplete Orders.
         $useDisplayQuery = (bool) config('flowtrack.workflow_display_query_enabled', false)
-            && $isPublishedOrderWorkflow;
+            && ($isPublishedOrderWorkflow || $isFrozenOrderWorkflow);
 
         $relations = [
             $workflowRelation,
@@ -1252,6 +1265,26 @@ class LegacyJobService
                     $displayTaskIds[] = (int) $modalTask->id;
                 }
 
+                // In three-level mode normal task file rows are loaded only
+                // after opening that task. Preserve full evidence for artwork,
+                // PO upload, shipment, and interactive workflow modals because
+                // revision/fulfilment presentation depends on complete history.
+                // This is a display-only change, never an action authorization.
+                $deferResourceRows = (bool) config('flowtrack.order_three_level_loading_enabled', false)
+                    && ! $fullDocuments
+                    && ! \App\Support\OrderShipmentPresenter::isShipmentPhase($selected, $displayTasks)
+                    && ! $displayTasks->contains(static function (Task $task): bool {
+                        $key = app(OrderWorkflowActionService::class)->automationKey($task);
+                        $title = strtolower(trim((string) $task->title));
+                        return in_array($key, ['ART_PREPARE_UPLOAD', 'NEW_UPLOAD_PO'], true)
+                            || (str_contains($title, 'artwork')
+                                && (str_contains($title, 'upload') || str_contains($title, 'prepare')));
+                    });
+                $display->setResourceDetailsDeferred($job, $deferResourceRows);
+                $resourceTaskId = (int) ($preference['resourceTaskId'] ?? 0);
+                $resourceTaskIds = $deferResourceRows && in_array($resourceTaskId, $displayTaskIds, true)
+                    ? [$resourceTaskId] : [];
+
                 // Exact displayed document cards require their full existing
                 // file metadata. Other phase documents wait until that phase
                 // is opened. A modal keeps the full legacy document scope so
@@ -1265,7 +1298,7 @@ class LegacyJobService
                     $job->load([
                         'documents' => fn ($documents) => $documents->where(
                             fn (Builder $scope) => $scope
-                                ->whereIn('task_id', $displayTaskIds)
+                                ->whereIn('task_id', $deferResourceRows ? $resourceTaskIds : $displayTaskIds)
                                 ->orWhere('category', \App\Models\Document::CATEGORY_ARTWORK_TRACKING_PDF),
                         ),
                         'documents.uploader:id,name,profile_image_path',
@@ -1301,7 +1334,8 @@ class LegacyJobService
                         }
                     }
                 }
-                $this->hydrateLoadedTaskLinks($job, $fullDocuments ? null : $displayTaskIds);
+                $this->hydrateLoadedTaskLinks($job, $fullDocuments
+                    ? null : ($deferResourceRows ? $resourceTaskIds : $displayTaskIds));
                 // Historical/manual artwork upload tasks may have a title
                 // recognized by artwork repair without a Task Pack automation
                 // key. Keep revision notes and accepted-file presentation for
@@ -1807,7 +1841,21 @@ class LegacyJobService
                 ->whereKey((int) $workflow->id)
                 ->exists();
 
-            if ($usesLiveOrderWorkflow) {
+            if ($usesLiveOrderWorkflow && config('flowtrack.order_template_version_isolation_enabled', false)) {
+                // The Order's runtime phases and Task Pack items are frozen at
+                // creation, in this SAME transaction as FlowJob and its Tasks.
+                // No published-definition sync can rewrite this Order later.
+                // Never clone the Workflow::phases compatibility graph: it can
+                // include obsolete stages, unlike the selected template graph.
+                $job = app(JobWorkflowSnapshotService::class)->snapshot(
+                    $job, (int) $workflow->id, $workflowTemplate->phases
+                );
+                $job->load(['workflow.phases.taskPack.items.defaultAssignee',
+                    'workflow.phases.taskPack.items.defaultDepartment',
+                    'workflow.phases.taskPack.items.priority',
+                    'workflow.phases.taskPack.items.documentCategory', 'phase']);
+                $operationalPhase = $job->phase;
+            } elseif ($usesLiveOrderWorkflow) {
                 $job->load(['workflow', 'phase']);
                 $job->workflow->setRelation('phases', $workflowTemplate->phases->values());
                 $job->setRelation('phase', $phase);
