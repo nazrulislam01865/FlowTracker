@@ -89,10 +89,12 @@
             </div>
 
             <div class="ft-po-workspace-heading">
-                <div><h3>{{ $poRows ? 'Generated purchase orders' : 'Create supplier purchase order' }}</h3><p>{{ $poRows ? 'Review, download or email the PDFs associated with this order.' : 'Choose a PO format and generate a PDF from the order products above.' }}</p></div>
+                <div><h3>{{ $poRows ? 'Generated purchase orders' : (config('flowtrack.supplier_po_creation_enabled', false) ? 'Create supplier purchase order' : 'Purchase order creation unavailable') }}</h3><p>{{ $poRows ? 'Review, download or email the PDFs associated with this order.' : (config('flowtrack.supplier_po_creation_enabled', false) ? 'Choose a PO format and generate a PDF from the order products above.' : 'Supplier PO creation is temporarily disabled.') }}</p></div>
                 @if($poRows)<span class="ft-po-status is-ready">{{ count($poRows) }} {{ count($poRows) === 1 ? 'PO' : 'POs' }} generated</span>@endif
             </div>
-            @if(!$canEditSelectedOrder || strcasecmp((string) $selectedOrder->status, 'Cancelled') === 0)
+            @if(!config('flowtrack.supplier_po_creation_enabled', false) && !$poRows)
+                <p class="ft-po-readonly-note">Supplier PO creation is temporarily disabled.</p>
+            @elseif(!$canEditSelectedOrder || strcasecmp((string) $selectedOrder->status, 'Cancelled') === 0)
                 <p class="ft-po-readonly-note">You can view generated purchase orders for this order, but you don't have permission to create or send them.</p>
                 @foreach($poRows as $po)
                     <div class="ft-po-readonly-row">

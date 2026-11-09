@@ -30,6 +30,12 @@ final class PurchaseOrders extends Component
     public array $orderWorkflowActionPayload = [];
     public array $orderWorkflowActionModalPreview = [];
 
+    public function boot(): void
+    {
+        // Block both initial mounts and stale Livewire update requests while disabled.
+        abort_unless(config('flowtrack.supplier_po_creation_enabled', false), 404);
+    }
+
     public function mount(): void
     {
         abort_unless(auth()->user()?->canAccess('jobs.view'), 403);
@@ -160,6 +166,7 @@ final class PurchaseOrders extends Component
 
     public function createSupplierPurchaseOrders(): void
     {
+        abort_unless(config('flowtrack.supplier_po_creation_enabled', false), 403, 'Supplier PO creation is temporarily disabled.');
         $order = $this->editableOrder();
         $this->validate([
             'orderWorkflowActionPayload.supplier_po_mode' => ['required', 'in:single,split'],

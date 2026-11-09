@@ -4,6 +4,8 @@ return [
     // Public Order Tracking / QR is enabled by default; use the env switch to disable if needed.
     'order_tracking_enabled' => env('FLOWTRACK_ORDER_TRACKING_ENABLED', true),
     'workspace_id' => (int) env('FLOWTRACK_WORKSPACE_ID', 1),
+    // Supplier PO creation is held until release approval. Enable explicitly when ready.
+    'supplier_po_creation_enabled' => (bool) env('FLOWTRACK_SUPPLIER_PO_CREATION_ENABLED', false),
     // Phase 3: keep legacy workspace-wide refresh routing available for immediate rollback.
     'order_targeted_events_enabled' => (bool) env('FLOWTRACK_ORDER_TARGETED_EVENTS_ENABLED', false),
     // Phase 4: bounded general Order documents, with the original full-history

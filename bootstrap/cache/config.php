@@ -600,6 +600,7 @@
   array (
     'order_tracking_enabled' => true,
     'workspace_id' => 1,
+    'supplier_po_creation_enabled' => false,
     'order_targeted_events_enabled' => true,
     'order_attachment_pagination_enabled' => false,
     'workflow_maintenance_batch_enabled' => true,

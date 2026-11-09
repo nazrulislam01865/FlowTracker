@@ -1,4 +1,5 @@
 @props(['orderId', 'generated' => false, 'select' => false])
+@if(config('flowtrack.supplier_po_creation_enabled', false))
 <div {{ $attributes->class(['ft-po-row-action', 'is-generated' => $generated]) }}>
     @if($select)
         <x-ui.button :variant="$generated ? 'secondary' : 'primary'" size="sm"
@@ -27,3 +28,4 @@
         </x-ui.button>
     @endif
 </div>
+@endif

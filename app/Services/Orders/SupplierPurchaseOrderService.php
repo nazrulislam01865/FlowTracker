@@ -81,6 +81,7 @@ final class SupplierPurchaseOrderService
     /** @return list<SupplierPurchaseOrder> */
     public function generate(FlowJob $job, User $actor, string $mode, array $splitItemIds, array $templateDetails = []): array
     {
+        abort_unless(config('flowtrack.supplier_po_creation_enabled', false), 403, 'Supplier PO creation is temporarily disabled.');
         abort_unless(in_array($mode, ['single', 'split'], true), 422);
         app(OrderHoldService::class)->assertNotHeld((int) $job->id);
         $templateKeys = [

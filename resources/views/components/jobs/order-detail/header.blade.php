@@ -202,9 +202,9 @@
                 </div>
 
                 <div class="ft-order-header-actions" aria-label="Order actions">
-                    @unless($isCancelled)
+                    @if(!$isCancelled && config('flowtrack.supplier_po_creation_enabled', false))
                         <x-ui.button variant="secondary" size="sm" :href="route('orders.purchase-orders', ['order' => $job->id])" wire:navigate>Generate PO</x-ui.button>
-                    @endunless
+                    @endif
                     @if($canInitiateRedo)
                         <button type="button" class="btn redo small" wire:click="openRedoModal" title="Create a controlled redo linked to this order.">↻ Initiate Redo</button>
                     @endif
