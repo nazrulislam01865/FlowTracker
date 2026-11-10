@@ -78,7 +78,11 @@ class DashboardReleaseAProgressiveLoadingTest extends TestCase
             $this->assertStringContainsString('public '.($property === 'rangeDays' ? 'int' : 'string').' $'.$property, $overview);
             $this->assertStringContainsString('public '.($property === 'rangeDays' ? 'int' : 'string').' $'.$property, $other);
         }
-        $this->assertStringContainsString('lazy', $shell);
-        $this->assertStringContainsString('defer', $shell);
+        // The panel's own skeleton is rendered on the initial request,
+        // and only its explicit load action fetches data in a later request.
+        $this->assertStringNotContainsString(' lazy ', $shell);
+        $this->assertStringNotContainsString(' defer ', $shell);
+        $this->assertStringContainsString('wire:init="loadDashboardPanel"', file_get_contents(resource_path('views/livewire/dashboard/overview-placeholder.blade.php')));
+        $this->assertStringContainsString('wire:intersect.once="loadDashboardPanel"', file_get_contents(resource_path('views/livewire/dashboard/panel-placeholder.blade.php')));
     }
 }

@@ -14,6 +14,7 @@ final class TeamPanel extends Panel
 
     public function render(): View
     {
+        if (! $this->dashboardReady) return $this->placeholder();
         [$actor, $filters] = $this->authorizedFilters();
         abort_unless(app(AccessControlService::class)->can($actor, 'reports', 'view'), 403);
         try {

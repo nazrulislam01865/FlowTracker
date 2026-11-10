@@ -91,6 +91,7 @@
 
 ?>
         <article class="ft-mgmt-panel ft-mgmt-attention-prototype ft-mgmt-attention-compact ft-mgmt-dashboard-half-panel" data-dashboard-panel="attention">
+    <div class="ft-mgmt-dashboard-panel-swap" style="display:contents" wire:replace <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'dashboard-attention-content'; ?>wire:key="dashboard-attention-content">
             <div class="ft-mgmt-panel-head">
                 <div><h2>Needs attention</h2><p>Orders and Inquiries ranked by urgency and impact</p></div>
                 <a class="ft-mgmt-link" href="<?php echo e($attentionViewAllRoute); ?>" wire:navigate>View all</a>
@@ -138,5 +139,6 @@
                     <div class="ft-mgmt-empty">No attention items match the current filters.</div>
                 <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
             </div>
-        </article>
+            </div>
+</article>
 <?php /**PATH /Applications/XAMPP/xamppfiles/htdocs/laravel/FlowTracker/resources/views/livewire/dashboard/attention-panel.blade.php ENDPATH**/ ?>

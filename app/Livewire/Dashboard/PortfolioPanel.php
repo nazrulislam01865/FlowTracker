@@ -13,6 +13,7 @@ final class PortfolioPanel extends Panel
 
     public function render(): View
     {
+        if (! $this->dashboardReady) return $this->placeholder();
         [$actor, $filters] = $this->authorizedFilters();
         try {
             $rows = app(DashboardClientPortfolioQuery::class)->handle($actor, $filters);

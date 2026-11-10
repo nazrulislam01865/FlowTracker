@@ -11,7 +11,8 @@
             'q' => $search,
         ], static fn ($value) => $value !== null && $value !== '');
     @endphp
-    <section class="ft-mgmt-panel ft-mgmt-team-panel ft-mgmt-panel-spaced" data-dashboard-panel="team">
+    <article class="ft-mgmt-panel ft-mgmt-team-panel ft-mgmt-panel-spaced" data-dashboard-panel="team">
+    <div class="ft-mgmt-dashboard-panel-swap" style="display:contents" wire:replace wire:key="dashboard-team-content">
         <div class="ft-mgmt-panel-head ft-mgmt-team-panel-head">
             <div>
                 <h2>Team performance &amp; workload</h2>
@@ -28,4 +29,5 @@
                 @endforelse
             </div>
         </div>
-    </section>
+        </div>
+</article>

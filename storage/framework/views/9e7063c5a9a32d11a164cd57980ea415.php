@@ -10,6 +10,7 @@
 
 ?>
     <article class="ft-mgmt-panel ft-mgmt-recent-prototype" data-dashboard-panel="activity">
+    <div class="ft-mgmt-dashboard-panel-swap" style="display:contents" wire:replace <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'dashboard-activity-content'; ?>wire:key="dashboard-activity-content">
             <div class="ft-mgmt-panel-head">
                 <div><h2>Recent activity</h2><p>Latest changes from Orders, Inquiries and Tasks</p></div>
                 <div class="ft-mgmt-tabs">
@@ -63,5 +64,6 @@
                     </a>
                 <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?><div class="ft-mgmt-empty">No Order, Inquiry or Task changes match the selected period or filters.</div><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
             </div>
-        </article>
+            </div>
+</article>
 <?php /**PATH /Applications/XAMPP/xamppfiles/htdocs/laravel/FlowTracker/resources/views/livewire/dashboard/activity-panel.blade.php ENDPATH**/ ?>

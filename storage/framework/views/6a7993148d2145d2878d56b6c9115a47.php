@@ -79,7 +79,7 @@
 $__split = function ($name, $params = []) {
     return [$name, $params];
 };
-[$__name, $__params] = $__split('dashboard.overview-panel', ['range-days' => $rangeDays,'client-filter' => $clientFilter,'team-filter' => $teamFilter,'search' => $search,'filter-generation' => $filterGeneration,'defer' => true]);
+[$__name, $__params] = $__split('dashboard.overview-panel', ['range-days' => $rangeDays,'client-filter' => $clientFilter,'team-filter' => $teamFilter,'search' => $search,'filter-generation' => $filterGeneration]);
 
 $__keyOuter = $__key ?? null;
 
@@ -106,7 +106,7 @@ unset($__split);
 $__split = function ($name, $params = []) {
     return [$name, $params];
 };
-[$__name, $__params] = $__split('dashboard.priority-panel', ['range-days' => $rangeDays,'client-filter' => $clientFilter,'team-filter' => $teamFilter,'search' => $search,'filter-generation' => $filterGeneration,'lazy' => true]);
+[$__name, $__params] = $__split('dashboard.priority-panel', ['range-days' => $rangeDays,'client-filter' => $clientFilter,'team-filter' => $teamFilter,'search' => $search,'filter-generation' => $filterGeneration]);
 
 $__keyOuter = $__key ?? null;
 
@@ -134,7 +134,7 @@ unset($__split);
 $__split = function ($name, $params = []) {
     return [$name, $params];
 };
-[$__name, $__params] = $__split('dashboard.attention-panel', ['range-days' => $rangeDays,'client-filter' => $clientFilter,'team-filter' => $teamFilter,'search' => $search,'filter-generation' => $filterGeneration,'lazy' => true]);
+[$__name, $__params] = $__split('dashboard.attention-panel', ['range-days' => $rangeDays,'client-filter' => $clientFilter,'team-filter' => $teamFilter,'search' => $search,'filter-generation' => $filterGeneration]);
 
 $__keyOuter = $__key ?? null;
 
@@ -160,7 +160,7 @@ unset($__split);
 $__split = function ($name, $params = []) {
     return [$name, $params];
 };
-[$__name, $__params] = $__split('dashboard.tagged-comments', ['range-days' => $rangeDays,'client-filter' => $clientFilter,'team-filter' => $teamFilter,'search' => $search,'filter-generation' => $filterGeneration,'lazy' => true]);
+[$__name, $__params] = $__split('dashboard.tagged-comments', ['range-days' => $rangeDays,'client-filter' => $clientFilter,'team-filter' => $teamFilter,'search' => $search,'filter-generation' => $filterGeneration]);
 
 $__keyOuter = $__key ?? null;
 
@@ -188,7 +188,7 @@ unset($__split);
 $__split = function ($name, $params = []) {
     return [$name, $params];
 };
-[$__name, $__params] = $__split('dashboard.distribution-panel', ['range-days' => $rangeDays,'client-filter' => $clientFilter,'team-filter' => $teamFilter,'search' => $search,'filter-generation' => $filterGeneration,'lazy' => true]);
+[$__name, $__params] = $__split('dashboard.distribution-panel', ['range-days' => $rangeDays,'client-filter' => $clientFilter,'team-filter' => $teamFilter,'search' => $search,'filter-generation' => $filterGeneration]);
 
 $__keyOuter = $__key ?? null;
 
@@ -216,7 +216,7 @@ unset($__split);
 $__split = function ($name, $params = []) {
     return [$name, $params];
 };
-[$__name, $__params] = $__split('dashboard.team-panel', ['range-days' => $rangeDays,'client-filter' => $clientFilter,'team-filter' => $teamFilter,'search' => $search,'filter-generation' => $filterGeneration,'lazy' => true]);
+[$__name, $__params] = $__split('dashboard.team-panel', ['range-days' => $rangeDays,'client-filter' => $clientFilter,'team-filter' => $teamFilter,'search' => $search,'filter-generation' => $filterGeneration]);
 
 $__keyOuter = $__key ?? null;
 
@@ -245,7 +245,7 @@ unset($__split);
 $__split = function ($name, $params = []) {
     return [$name, $params];
 };
-[$__name, $__params] = $__split('dashboard.portfolio-panel', ['range-days' => $rangeDays,'client-filter' => $clientFilter,'team-filter' => $teamFilter,'search' => $search,'filter-generation' => $filterGeneration,'lazy' => true]);
+[$__name, $__params] = $__split('dashboard.portfolio-panel', ['range-days' => $rangeDays,'client-filter' => $clientFilter,'team-filter' => $teamFilter,'search' => $search,'filter-generation' => $filterGeneration]);
 
 $__keyOuter = $__key ?? null;
 
@@ -271,7 +271,7 @@ unset($__split);
 $__split = function ($name, $params = []) {
     return [$name, $params];
 };
-[$__name, $__params] = $__split('dashboard.catalogue-panel', ['lazy' => true]);
+[$__name, $__params] = $__split('dashboard.catalogue-panel', []);
 
 $__keyOuter = $__key ?? null;
 
@@ -299,7 +299,7 @@ unset($__split);
 $__split = function ($name, $params = []) {
     return [$name, $params];
 };
-[$__name, $__params] = $__split('dashboard.activity-panel', ['range-days' => $rangeDays,'client-filter' => $clientFilter,'team-filter' => $teamFilter,'search' => $search,'filter-generation' => $filterGeneration,'lazy' => true]);
+[$__name, $__params] = $__split('dashboard.activity-panel', ['range-days' => $rangeDays,'client-filter' => $clientFilter,'team-filter' => $teamFilter,'search' => $search,'filter-generation' => $filterGeneration]);
 
 $__keyOuter = $__key ?? null;
 

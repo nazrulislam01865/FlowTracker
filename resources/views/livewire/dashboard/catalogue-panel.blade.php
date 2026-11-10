@@ -1,4 +1,5 @@
         <article class="ft-mgmt-panel ft-mgmt-catalogue-side ft-mgmt-catalogue-prototype ft-mgmt-dashboard-half-panel" data-dashboard-panel="catalogue">
+    <div class="ft-mgmt-dashboard-panel-swap" style="display:contents" wire:replace wire:key="dashboard-catalogue-content">
             <div class="ft-mgmt-catalogue-head">
                 <div class="ft-mgmt-catalogue-title">
                     <h2>Catalogue readiness</h2>
@@ -42,4 +43,5 @@
                     @endforeach
                 </div>
             </div>
-        </article>
+            </div>
+</article>

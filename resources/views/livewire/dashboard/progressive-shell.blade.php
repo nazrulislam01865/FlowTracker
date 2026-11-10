@@ -53,50 +53,49 @@
         :client-filter="$clientFilter"
         :team-filter="$teamFilter"
         :search="$search" :filter-generation="$filterGeneration"
-        defer
         key="dashboard-progressive-overview"
     />
 
     <livewire:dashboard.priority-panel
         :range-days="$rangeDays" :client-filter="$clientFilter" :team-filter="$teamFilter" :search="$search" :filter-generation="$filterGeneration"
-        lazy key="dashboard-priority"
+        key="dashboard-priority"
     />
 
     <section class="ft-mgmt-grid ft-mgmt-dashboard-pair-grid">
         <livewire:dashboard.attention-panel
             :range-days="$rangeDays" :client-filter="$clientFilter" :team-filter="$teamFilter" :search="$search" :filter-generation="$filterGeneration"
-            lazy key="dashboard-attention"
+            key="dashboard-attention"
         />
         <livewire:dashboard.tagged-comments
             :range-days="$rangeDays" :client-filter="$clientFilter" :team-filter="$teamFilter" :search="$search" :filter-generation="$filterGeneration"
-            lazy key="dashboard-tagged-comments"
+            key="dashboard-tagged-comments"
         />
     </section>
 
     <livewire:dashboard.distribution-panel
         :range-days="$rangeDays" :client-filter="$clientFilter" :team-filter="$teamFilter" :search="$search" :filter-generation="$filterGeneration"
-        lazy key="dashboard-distribution"
+        key="dashboard-distribution"
     />
 
     @if(auth()->user()->canAccess('reports.view'))
         <livewire:dashboard.team-panel
             :range-days="$rangeDays" :client-filter="$clientFilter" :team-filter="$teamFilter" :search="$search" :filter-generation="$filterGeneration"
-            lazy key="dashboard-team"
+            key="dashboard-team"
         />
     @endif
 
     <section class="ft-mgmt-grid ft-mgmt-dashboard-pair-grid">
         <livewire:dashboard.portfolio-panel
             :range-days="$rangeDays" :client-filter="$clientFilter" :team-filter="$teamFilter" :search="$search" :filter-generation="$filterGeneration"
-            lazy key="dashboard-portfolio"
+            key="dashboard-portfolio"
         />
         <livewire:dashboard.catalogue-panel
-            lazy key="dashboard-catalogue"
+            key="dashboard-catalogue"
         />
     </section>
 
     <livewire:dashboard.activity-panel
         :range-days="$rangeDays" :client-filter="$clientFilter" :team-filter="$teamFilter" :search="$search" :filter-generation="$filterGeneration"
-        lazy key="dashboard-activity"
+        key="dashboard-activity"
     />
 </x-ui.management-theme>

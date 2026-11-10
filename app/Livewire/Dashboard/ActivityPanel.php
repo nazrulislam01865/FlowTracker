@@ -21,6 +21,7 @@ final class ActivityPanel extends Panel
 
     public function render(): View
     {
+        if (! $this->dashboardReady) return $this->placeholder();
         [$actor, $filters] = $this->authorizedFilters();
         abort_unless(in_array($this->activityTab, ['all', 'orders', 'inquiries', 'tasks'], true), 422);
         try {

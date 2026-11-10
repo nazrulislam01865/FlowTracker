@@ -10,6 +10,7 @@
 
 @endphp
     <article class="ft-mgmt-panel ft-mgmt-recent-prototype" data-dashboard-panel="activity">
+    <div class="ft-mgmt-dashboard-panel-swap" style="display:contents" wire:replace wire:key="dashboard-activity-content">
             <div class="ft-mgmt-panel-head">
                 <div><h2>Recent activity</h2><p>Latest changes from Orders, Inquiries and Tasks</p></div>
                 <div class="ft-mgmt-tabs">
@@ -42,4 +43,5 @@
                     </a>
                 @empty<div class="ft-mgmt-empty">No Order, Inquiry or Task changes match the selected period or filters.</div>@endforelse
             </div>
-        </article>
+            </div>
+</article>

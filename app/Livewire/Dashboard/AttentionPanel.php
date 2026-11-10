@@ -21,6 +21,7 @@ final class AttentionPanel extends Panel
 
     public function render(): View
     {
+        if (! $this->dashboardReady) return $this->placeholder();
         [$actor, $filters] = $this->authorizedFilters();
         abort_unless(in_array($this->attentionTab, ['all', 'orders', 'inquiries'], true), 422);
         $clientId = $filters->clientId;

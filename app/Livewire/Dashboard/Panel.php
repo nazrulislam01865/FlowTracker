@@ -30,6 +30,19 @@ abstract class Panel extends Component
 
     public int $filterGeneration = 0;
 
+    /** A stable component root owns both loading and loaded markup. */
+    public bool $dashboardReady = false;
+
+    public function loadDashboardPanel(): void
+    {
+        if ($this->dashboardReady) {
+            $this->skipRender();
+            return;
+        }
+
+        $this->dashboardReady = true;
+    }
+
     protected abstract function heading(): string;
 
     protected function placeholderHeight(): int
@@ -41,6 +54,7 @@ abstract class Panel extends Component
     {
         return view('livewire.dashboard.panel-placeholder', [
             'heading' => $this->heading(), 'height' => $this->placeholderHeight(),
+            'kind' => strtolower(class_basename($this)),
         ]);
     }
 
@@ -111,6 +125,7 @@ abstract class Panel extends Component
         report($exception);
         return view('livewire.dashboard.panel-error', [
             'heading' => $this->heading(), 'height' => $this->placeholderHeight(),
+            'kind' => strtolower(class_basename($this)),
         ]);
     }
 }

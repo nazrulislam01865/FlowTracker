@@ -34,8 +34,13 @@ class Index extends Component
     #[On('flowtrack-notification')]
     public function refreshRealtime(): void
     {
-        // Re-render the management dashboard when realtime state changes.
-        // Reset Priority Work so realtime removals cannot leave the user on an empty page.
+        if (config('dashboard.progressive_loading_enabled', false)) {
+            // Release C owns refresh at panel level, never re-render the shell.
+            $this->skipRender();
+            return;
+        }
+
+        // Preserve legacy dashboard behavior when progressive loading is off.
         $this->priorityPage = 1;
     }
 

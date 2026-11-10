@@ -16,8 +16,10 @@ class DashboardReleaseBPanelIsolationTest extends TestCase
         }
         $this->assertStringNotContainsString('<livewire:dashboard.legacy-panels', $shell);
         $this->assertStringNotContainsString('wire:poll', $shell);
-        $this->assertStringContainsString('lazy key="dashboard-priority"', $shell);
-        $this->assertStringContainsString('lazy key="dashboard-activity"', $shell);
+        $this->assertStringContainsString('key="dashboard-priority"', $shell);
+        $this->assertStringContainsString('key="dashboard-activity"', $shell);
+        $this->assertStringNotContainsString('lazy key=', $shell);
+        $this->assertStringContainsString('wire:intersect.once="loadDashboardPanel"', file_get_contents(resource_path('views/livewire/dashboard/panel-placeholder.blade.php')));
     }
 
     public function test_each_panel_owns_exactly_its_query_without_full_dashboard_aggregate(): void

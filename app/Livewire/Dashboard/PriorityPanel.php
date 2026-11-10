@@ -35,6 +35,7 @@ final class PriorityPanel extends Panel
 
     public function render(): View
     {
+        if (! $this->dashboardReady) return $this->placeholder();
         [$actor, $filters] = $this->authorizedFilters();
         abort_unless(in_array($this->priorityTab, ['orders', 'inquiries', 'tasks'], true), 422);
         $clientId = $filters->clientId;

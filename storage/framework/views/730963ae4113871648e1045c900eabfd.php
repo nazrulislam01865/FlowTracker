@@ -32,7 +32,8 @@
     if ($cursor < 100) $gradientSegments[] = '#edf2f5 '.$cursor.'% 100%';
     $donutBackground = $statusTotal > 0 ? 'conic-gradient('.implode(',', $gradientSegments).')' : '#edf2f5';
 ?>
-    <section class="ft-mgmt-grid ft-mgmt-dashboard-pair-grid" data-dashboard-panel="distribution">
+    <section class="ft-mgmt-dashboard-distribution-shell" data-dashboard-panel="distribution">
+    <div class="ft-mgmt-grid ft-mgmt-dashboard-pair-grid ft-mgmt-dashboard-panel-swap" wire:replace <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'dashboard-distribution-content'; ?>wire:key="dashboard-distribution-content">
         <article class="ft-mgmt-panel ft-mgmt-flow-prototype">
             <div class="ft-mgmt-panel-head">
                 <div><h2>Work moving through FlowTrack</h2><p>Active records grouped by configured workflow phase. Client-specific phase differences are labelled.</p></div>
@@ -82,5 +83,6 @@
                 </div>
             </div>
         </article>
-    </section>
+        </div>
+</section>
 <?php /**PATH /Applications/XAMPP/xamppfiles/htdocs/laravel/FlowTracker/resources/views/livewire/dashboard/distribution-panel.blade.php ENDPATH**/ ?>

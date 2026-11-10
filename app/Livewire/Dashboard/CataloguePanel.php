@@ -16,6 +16,7 @@ final class CataloguePanel extends Panel
 
     public function render(): View
     {
+        if (! $this->dashboardReady) return $this->placeholder();
         [$actor, $filters] = $this->authorizedFilters();
         try {
             return view('livewire.dashboard.catalogue-panel', [

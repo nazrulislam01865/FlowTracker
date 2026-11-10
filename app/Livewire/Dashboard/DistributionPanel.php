@@ -27,6 +27,7 @@ final class DistributionPanel extends Panel
 
     public function render(): View
     {
+        if (! $this->dashboardReady) return $this->placeholder();
         [$actor, $filters] = $this->authorizedFilters();
         abort_unless(in_array($this->flowTab, ['orders', 'inquiries'], true), 422);
         abort_unless(in_array($this->taskStatusTab, ['orders', 'inquiries'], true), 422);

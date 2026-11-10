@@ -91,6 +91,7 @@
 
 @endphp
         <article class="ft-mgmt-panel ft-mgmt-attention-prototype ft-mgmt-attention-compact ft-mgmt-dashboard-half-panel" data-dashboard-panel="attention">
+    <div class="ft-mgmt-dashboard-panel-swap" style="display:contents" wire:replace wire:key="dashboard-attention-content">
             <div class="ft-mgmt-panel-head">
                 <div><h2>Needs attention</h2><p>Orders and Inquiries ranked by urgency and impact</p></div>
                 <a class="ft-mgmt-link" href="{{ $attentionViewAllRoute }}" wire:navigate>View all</a>
@@ -138,4 +139,5 @@
                     <div class="ft-mgmt-empty">No attention items match the current filters.</div>
                 @endforelse
             </div>
-        </article>
+            </div>
+</article>

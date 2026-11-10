@@ -11,7 +11,8 @@
             'q' => $search,
         ], static fn ($value) => $value !== null && $value !== '');
     ?>
-    <section class="ft-mgmt-panel ft-mgmt-team-panel ft-mgmt-panel-spaced" data-dashboard-panel="team">
+    <article class="ft-mgmt-panel ft-mgmt-team-panel ft-mgmt-panel-spaced" data-dashboard-panel="team">
+    <div class="ft-mgmt-dashboard-panel-swap" style="display:contents" wire:replace <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'dashboard-team-content'; ?>wire:key="dashboard-team-content">
         <div class="ft-mgmt-panel-head ft-mgmt-team-panel-head">
             <div>
                 <h2>Team performance &amp; workload</h2>
@@ -49,5 +50,6 @@
                 <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
             </div>
         </div>
-    </section>
+        </div>
+</article>
 <?php /**PATH /Applications/XAMPP/xamppfiles/htdocs/laravel/FlowTracker/resources/views/livewire/dashboard/team-panel.blade.php ENDPATH**/ ?>

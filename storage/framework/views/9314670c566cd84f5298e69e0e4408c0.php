@@ -1,4 +1,5 @@
 <section class="ft-mgmt-panel ft-mgmt-mentions-panel" data-dashboard-panel="tagged-comments" id="mentions-for-you">
+    <div class="ft-mgmt-dashboard-panel-swap" style="display:contents" wire:replace <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'dashboard-tagged-comments-content'; ?>wire:key="dashboard-tagged-comments-content">
     <div class="ft-mgmt-mentions-head">
         <div class="ft-mgmt-mentions-heading">
             <div class="ft-mgmt-mentions-title-line">
@@ -94,6 +95,7 @@
         <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
             <div class="ft-mgmt-mentions-empty">No mentions in this view.</div>
         <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+    </div>
     </div>
 </section>
 <?php /**PATH /Applications/XAMPP/xamppfiles/htdocs/laravel/FlowTracker/resources/views/livewire/dashboard/tagged-comments.blade.php ENDPATH**/ ?>

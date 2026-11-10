@@ -90,7 +90,8 @@
     };
 
 ?>
-    <section class="ft-mgmt-panel ft-mgmt-panel-spaced" data-dashboard-panel="priority">
+    <article class="ft-mgmt-panel ft-mgmt-panel-spaced" data-dashboard-panel="priority">
+    <div class="ft-mgmt-dashboard-panel-swap" style="display:contents" wire:replace <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'dashboard-priority-content'; ?>wire:key="dashboard-priority-content">
         <div class="ft-mgmt-panel-head">
             <div><h2>Priority work</h2><p>Top urgent Orders, Inquiries and Tasks ranked by attention, due date and priority</p></div>
             <div class="ft-mgmt-tabs">
@@ -289,5 +290,6 @@
                 title="Next page"
             >→</button>
         </div>
-    </section>
+        </div>
+</article>
 <?php /**PATH /Applications/XAMPP/xamppfiles/htdocs/laravel/FlowTracker/resources/views/livewire/dashboard/priority-panel.blade.php ENDPATH**/ ?>

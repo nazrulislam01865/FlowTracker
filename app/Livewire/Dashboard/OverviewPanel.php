@@ -30,6 +30,18 @@ class OverviewPanel extends Component
 
     public int $filterGeneration = 0;
 
+    public bool $dashboardReady = false;
+
+    public function loadDashboardPanel(): void
+    {
+        if ($this->dashboardReady) {
+            $this->skipRender();
+            return;
+        }
+
+        $this->dashboardReady = true;
+    }
+
     public function placeholder(): View
     {
         return view('livewire.dashboard.overview-placeholder');
@@ -50,6 +62,7 @@ class OverviewPanel extends Component
 
     public function render(): View
     {
+        if (! $this->dashboardReady) return $this->placeholder();
         $actor = auth()->user();
         abort_unless($actor instanceof User && app(AccessControlService::class)->can($actor, 'dashboard', 'view'), 403);
         abort_unless(in_array($this->rangeDays, [1, 7, 30], true), 422);

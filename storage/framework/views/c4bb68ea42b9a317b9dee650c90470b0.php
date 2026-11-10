@@ -1,4 +1,5 @@
         <article class="ft-mgmt-panel ft-mgmt-client-panel" data-dashboard-panel="portfolio">
+    <div class="ft-mgmt-dashboard-panel-swap" style="display:contents" wire:replace <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'dashboard-portfolio-content'; ?>wire:key="dashboard-portfolio-content">
             <div class="ft-mgmt-panel-head"><div><h2>Client portfolio</h2><p>Activity and completion in the selected dashboard period</p></div><a class="ft-mgmt-link" href="<?php echo e(route('clients.index')); ?>" wire:navigate>All clients</a></div>
             <div class="ft-mgmt-panel-body ft-mgmt-client-portfolio-body">
                 <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($clientPortfolio->isNotEmpty()): ?>
@@ -58,5 +59,6 @@
                     <div class="ft-mgmt-empty">No client portfolio data matches the current filters.</div>
                 <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
             </div>
-        </article>
+            </div>
+</article>
 <?php /**PATH /Applications/XAMPP/xamppfiles/htdocs/laravel/FlowTracker/resources/views/livewire/dashboard/portfolio-panel.blade.php ENDPATH**/ ?>
