@@ -226,6 +226,12 @@ Route::middleware('auth')->group(function () {
         ->name('orders.artwork-uploads.destroy');
 
     Route::get('/address-book', fn () => view('pages.artwork-address-book', ['title' => 'Address Book']))->name('artwork-address-book.index');
+    // Independent read-only prefetch: never hydrates or morphs the active
+    // workflow Livewire component, and never changes workflow/task state.
+    Route::get('/orders/{orderId}/workflow/stage-prefetch', \App\Http\Controllers\OrderStagePrefetchController::class)
+        ->middleware(['permission:jobs.view', 'throttle:90,1'])
+        ->whereNumber('orderId')
+        ->name('orders.workflow.stage-prefetch');
     Route::get('/orders', JobsController::class)->middleware('permission:jobs.view')->name('jobs.index');
     Route::get('/jobs', function (\Illuminate\Http\Request $request) {
         return redirect()->route('jobs.index', $request->query());

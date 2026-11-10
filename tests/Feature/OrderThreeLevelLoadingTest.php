@@ -11,13 +11,13 @@ use App\Models\Workflow;
 use App\Models\WorkflowPhase;
 use App\Models\WorkflowTemplate;
 use App\Support\OrderDetailPresenter;
-use Illuminate\Foundation\Testing\DatabaseMigrations;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /** Three-level loading is an opt-in read/display change, never a new workflow writer. */
 class OrderThreeLevelLoadingTest extends TestCase
 {
-    use DatabaseMigrations;
+    use RefreshDatabase;
 
     /** @return array{FlowJob, User, WorkflowPhase, WorkflowPhase} */
     private function orderWithTwoStages(): array
@@ -90,11 +90,14 @@ class OrderThreeLevelLoadingTest extends TestCase
     public function test_disabled_flag_preserves_original_workflow_template(): void
     {
         config()->set('flowtrack.order_three_level_loading_enabled', false);
-        $workflow = file_get_contents(resource_path('views/components/jobs/detail-overview.blade.php'));
-        $this->assertStringContainsString("config('flowtrack.order_three_level_loading_enabled', false)", $workflow);
-        $this->assertStringContainsString('<livewire:jobs.order-workflow-section', $workflow);
-        $this->assertStringContainsString('loadWorkflowSection',
-            file_get_contents(app_path('Livewire/Jobs/OrderWorkflowSection.php')));
+        $overview = file_get_contents(resource_path('views/components/jobs/detail-overview.blade.php'));
+        $component = file_get_contents(app_path('Livewire/Jobs/OrderWorkflowSection.php'));
+        $this->assertStringContainsString("config('flowtrack.order_three_level_loading_enabled', false)", $component);
+        $this->assertStringContainsString('<livewire:jobs.order-workflow-section', $overview);
+        $this->assertStringContainsString('loadWorkflowSection', $component);
+        $prefetch = file_get_contents(resource_path('views/livewire/jobs/order-workflow-section.blade.php'));
+        $this->assertStringContainsString('data-workflow-stage-prefetch', $prefetch);
+        $this->assertStringContainsString('requestIdleCallback(start', $prefetch);
     }
 
     public function test_resource_toggle_requires_visible_task_in_selected_phase(): void

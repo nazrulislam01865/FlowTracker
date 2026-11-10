@@ -1237,8 +1237,6 @@ class LegacyJobService
                 // Reuse the published definition graph and exact task scope.
                 // The legacy reader remains available by disabling one flag.
                 $display = app(\App\Queries\Orders\OrderWorkflowDisplayQuery::class);
-                $display->loadForAuthorizedOrder($job, $user, $publishedPhases);
-
                 $preference = $display->displayPreference($job);
                 $selected = $publishedPhases->firstWhere('id', (int) $preference['phase']);
                 $current = $publishedPhases->firstWhere('id', (int) $job->workflow_phase_id);
@@ -1246,6 +1244,18 @@ class LegacyJobService
                     $selected = $current;
                 }
                 $displayPhaseId = (int) ($selected?->id ?: $job->workflow_phase_id);
+
+                // Keep modal, historical, and rollback paths unchanged. With
+                // three-level loading, hydrate the selected phase's complete
+                // task cards only; other stages use a compact summary reader.
+                $phaseScoped = (bool) config('flowtrack.order_three_level_loading_enabled', false)
+                    && ! $preference['fullDocuments']
+                    && (int) $preference['modalTaskId'] === 0;
+                $display->loadForAuthorizedOrder(
+                    $job, $user, $publishedPhases, null,
+                    $phaseScoped ? [$displayPhaseId] : null,
+                );
+
                 $displayTasks = $job->tasks
                     ->where('workflow_phase_id', $displayPhaseId)->values();
                 $displayTaskIds = $displayTasks->pluck('id')->map(fn ($id): int => (int) $id)->all();
@@ -2076,7 +2086,7 @@ class LegacyJobService
             'event' => 'job.delivery_date_updated',
             'description' => $deliveryDate ? 'Delivery date changed to '.$deliveryDate : 'Delivery date cleared',
         ]);
-        app(NotificationService::class)->notifyJobParticipants($job->refresh(), 'Order delivery date updated', $job->displayOrderNumber().' · '.($deliveryDate ? 'Delivery '.$deliveryDate : 'Delivery date cleared'), 'update', $actor);
+        app(NotificationService::class)->notifyJobParticipants($job->refresh(), 'Order hand date updated', $job->displayOrderNumber().' · Hand date '.($deliveryDate ? 'updated' : 'cleared').'. Open the order for details.', 'order_activity', $actor);
         return $job->refresh();
     }
 
@@ -2534,9 +2544,10 @@ class LegacyJobService
             ]);
             $fresh = $job->refresh();
         }
+        $addressChanged = array_intersect(['shipping_address', 'shipping_postal_code'], array_keys($updates)) !== [];
         app(NotificationService::class)->notifyJobParticipants(
             $fresh,
-            'Order shipping details updated',
+            $addressChanged ? 'Order shipping address updated' : 'Order shipping details updated',
             $fresh->job_number.' · Shipping details changed',
             'update',
             $actor,
@@ -2732,7 +2743,8 @@ class LegacyJobService
         $notes = trim((string) ($data['notes'] ?? ''));
         abort_if(mb_strlen($notes) > 2000, 422, 'Product notes may not exceed 2000 characters.');
 
-        $updated = DB::transaction(function () use ($job, $item, $actor, $product, $categoryName, $supplierId, $quantity, $unitPrice, $supplierUnitPrice, $notes): FlowJobItem {
+        $productChangeLabel = null;
+        $updated = DB::transaction(function () use ($job, $item, $actor, $product, $categoryName, $supplierId, $quantity, $unitPrice, $supplierUnitPrice, $notes, &$productChangeLabel): FlowJobItem {
             $lockedJob = FlowJob::query()->whereKey($job->id)->lockForUpdate()->firstOrFail();
             $this->assertEditable($lockedJob, $actor);
             $lockedItem = FlowJobItem::query()
@@ -2753,7 +2765,7 @@ class LegacyJobService
                 ->exists();
             abort_if($duplicateExists, 422, 'This product is already added to the Order.');
 
-            $lockedItem->update([
+            $lockedItem->fill([
                 'catalog_product_id' => (int) $product->id,
                 'product_name' => (string) $product->name,
                 'category_name' => $categoryName,
@@ -2764,23 +2776,32 @@ class LegacyJobService
                 'notes' => $notes !== '' ? $notes : null,
                 'updated_by' => $actor->id,
             ]);
+
+            // Compare persisted fields, not all values submitted by the edit form.
+            // Automatic tier-price recalculation is not a separate user price edit.
+            $productChangeLabel = \App\Support\OrderActivityNotice::productChangeLabel(array_keys($lockedItem->getDirty()));
+            $lockedItem->save();
             $this->syncItemSummary($lockedJob);
-            $lockedJob->activities()->create([
-                'user_id' => $actor->id,
-                'event' => 'job.product_updated',
-                'description' => 'Product, supplier, quantity and price updated',
-            ]);
+            if ($productChangeLabel !== null) {
+                $lockedJob->activities()->create([
+                    'user_id' => $actor->id,
+                    'event' => 'job.product_updated',
+                    'description' => $productChangeLabel,
+                ]);
+            }
 
             return $lockedItem->refresh();
         }, 3);
 
-        app(NotificationService::class)->notifyJobParticipants(
-            $job->refresh(),
-            'Order product updated',
-            $job->displayOrderNumber().' · Product/supplier/quantity details updated',
-            'update',
-            $actor,
-        );
+        if ($productChangeLabel !== null) {
+            app(NotificationService::class)->notifyJobParticipants(
+                $job->refresh(),
+                $productChangeLabel,
+                $job->displayOrderNumber().' · '.$productChangeLabel.'. Open the order for details.',
+                'order_activity',
+                $actor,
+            );
+        }
 
         return $updated;
     }
@@ -2864,15 +2885,25 @@ class LegacyJobService
             app(NotificationService::class)->notifyJobParticipants(
                 $job->refresh(),
                 'Product added to Order',
-                $job->displayOrderNumber().' · '.$item->product_name.' · '.number_format($item->quantity).' units',
-                'update',
+                $job->displayOrderNumber().' · Product added. Open the order for details.',
+                'order_activity',
                 $actor,
             );
             return $item;
         }
 
-        $job->activities()->create(['user_id' => $actor->id, 'event' => 'job.product_updated', 'description' => 'Product and quantity details updated']);
-        app(NotificationService::class)->notifyJobParticipants($job->refresh(), 'Order product updated', $job->job_number.' · Product/category/quantity changed', 'update', $actor);
+        $productChangeLabel = \App\Support\OrderActivityNotice::label('job.product_updated', ['field' => $field]);
+        $job->activities()->create([
+            'user_id' => $actor->id,
+            'event' => 'job.product_updated',
+            'description' => $productChangeLabel,
+            'meta' => ['field' => $field, 'item_id' => (int) $item->id],
+        ]);
+        app(NotificationService::class)->notifyJobParticipants(
+            $job->refresh(), $productChangeLabel,
+            $job->displayOrderNumber().' · '.$productChangeLabel.'. Open the order for details.',
+            'order_activity', $actor,
+        );
         return $item;
     }
 
@@ -2941,7 +2972,7 @@ class LegacyJobService
         // is selected before recording the normal Product added notification.
         if ($product !== '') {
             $job->activities()->create(['user_id' => $actor->id, 'event' => 'job.product_added', 'description' => 'Product added to Order']);
-            app(NotificationService::class)->notifyJobParticipants($job->refresh(), 'Product added to Order', $job->displayOrderNumber().' · '.$item->product_name.' · '.number_format($item->quantity).' units', 'update', $actor);
+            app(NotificationService::class)->notifyJobParticipants($job->refresh(), 'Product added to Order', $job->displayOrderNumber().' · Product added. Open the order for details.', 'order_activity', $actor);
         }
 
         return $item->refresh();
@@ -2968,7 +2999,7 @@ class LegacyJobService
             $description = 'Product removed from active Order';
             if (filled($reason)) $description .= ': '.trim((string) $reason);
             $job->activities()->create(['user_id' => $actor->id, 'event' => 'job.product_removed', 'description' => $description]);
-            app(NotificationService::class)->notifyJobParticipants($job->refresh(), 'Product removed from Order', $job->job_number.' · Product retained in history', 'update', $actor);
+            app(NotificationService::class)->notifyJobParticipants($job->refresh(), 'Product removed from Order', $job->displayOrderNumber().' · Product removed from the active order.', 'order_activity', $actor);
         }
     }
 
@@ -2989,7 +3020,7 @@ class LegacyJobService
         $this->syncItemSummary($job);
 
         $job->activities()->create(['user_id' => $actor->id, 'event' => 'job.product_restored', 'description' => 'Product restored to active Order']);
-        app(NotificationService::class)->notifyJobParticipants($job->refresh(), 'Product restored to Order', $job->job_number.' · Product list updated', 'update', $actor);
+        app(NotificationService::class)->notifyJobParticipants($job->refresh(), 'Product restored to Order', $job->displayOrderNumber().' · Product restored to the active order.', 'order_activity', $actor);
 
         return $item->refresh();
     }

@@ -34,8 +34,8 @@ use Livewire\WithFileUploads;
  *
  * This deliberately reuses the proven workflow/task/shipment concerns so the
  * business rules stay identical while Livewire hydrates only workflow state.
- * Runtime reconciliation is deferred from the initial Order GET until this
- * section is actually requested.
+ * The optimized three-level path renders the default stage in the initial
+ * Order GET; the legacy viewport-triggered path remains available by flag.
  */
 final class OrderWorkflowSection extends Component
 {
@@ -135,6 +135,14 @@ final class OrderWorkflowSection extends Component
     {
         $this->orderId = $orderId;
         $this->selectedJobId = $orderId;
+
+        // With the optimized reader enabled, render the default stage's tasks
+        // in the same first Order Details response as the parent header. The
+        // previous viewport-triggered load remains the rollback path.
+        if ((bool) config('flowtrack.order_three_level_loading_enabled', false)
+            && (bool) config('flowtrack.workflow_display_query_enabled', false)) {
+            $this->loadWorkflowSection('workflow', 'order', $orderId);
+        }
     }
 
     #[On('order-hold-runtime-changed')]
@@ -210,12 +218,43 @@ final class OrderWorkflowSection extends Component
     public function selectOverviewPhase(int $phaseId): void
     {
         $user = auth()->user();
-        $job = app(VisibleOrderQuery::class)->base($user, $this->orderId);
-        app(VisibleOrderQuery::class)->loadOverviewShell($job, $user);
+        abort_unless($user instanceof User, 403);
+        if (! (bool) config('flowtrack.order_three_level_loading_enabled', false)
+            || ! (bool) config('flowtrack.workflow_display_query_enabled', false)) {
+            // Explicit rollback: keep the original phase-switch reader when
+            // the three-level feature is disabled.
+            $job = app(VisibleOrderQuery::class)->base($user, $this->orderId);
+            app(VisibleOrderQuery::class)->loadOverviewShell($job, $user);
+            $phase = $job->workflow?->phases?->firstWhere('id', $phaseId);
+            abort_unless($phase, 404);
+            abort_if((int) $phase->sequence > (int) ($job->phase?->sequence ?? 0), 422,
+                'Complete the current stage before opening a future stage.');
+            $this->overviewPhaseId = (int) $phase->id;
+            $this->expandedResourceTaskId = null;
+            return;
+        }
 
-        $phase = $job->workflow?->phases?->firstWhere('id', $phaseId);
+        // Phase switches need only the authorized Order and phase sequences.
+        // loadOverviewShell() would also fetch current-stage task documents and
+        // links, unnecessarily repeating them before the selected-stage render.
+        $job = app(VisibleOrderQuery::class)->scoped(
+            $user, $this->orderId, ['phase:id,sequence'],
+            ['id', 'workflow_id', 'workflow_phase_id', 'completed_at', 'status'],
+        );
+        $published = ! $job->completed_at
+            && ! in_array((string) $job->status, \App\Services\JobService::INACTIVE_STATUSES, true)
+            && app(\App\Services\OrderWorkflowSetupService::class)
+                ->isActiveOrderWorkflow((int) $job->workflow_id);
+        $phase = \App\Models\WorkflowPhase::query()
+            ->whereKey($phaseId)
+            ->where('is_active', true)
+            ->when($published,
+                fn ($query) => $query->where('workflow_template_id', (int) $job->workflow_id),
+                fn ($query) => $query->where('workflow_id', (int) $job->workflow_id))
+            ->first(['id', 'sequence']);
         abort_unless($phase, 404);
-        abort_if((int) $phase->sequence > (int) ($job->phase?->sequence ?? 0), 422, 'Complete the current stage before opening a future stage.');
+        abort_if((int) $phase->sequence > (int) ($job->phase?->sequence ?? 0), 422,
+            'Complete the current stage before opening a future stage.');
 
         $this->overviewPhaseId = (int) $phase->id;
         $this->expandedResourceTaskId = null;
@@ -294,6 +333,32 @@ final class OrderWorkflowSection extends Component
         }
     }
 
+    /**
+     * Track genuine phase changes before asking the scoped reader for task rows.
+     * Do not switch an intentionally selected historical phase. If an editor is
+     * open, defer following the new phase until its next safe render.
+     */
+    private function alignOverviewWithCurrentStage(int $currentPhaseId): void
+    {
+        $previousId = (int) ($this->lastOverviewWorkflowPhaseId ?: 0);
+        if ($currentPhaseId > 0 && $previousId > 0
+            && $currentPhaseId !== $previousId
+            && (int) ($this->overviewPhaseId ?: 0) === $previousId) {
+            if ($this->showOrderWorkflowActionModal
+                || $this->showOverviewTaskDocumentModal
+                || $this->showShipmentModal
+                || $this->showShipmentDetailsModal
+                || $this->shipmentInlineEditingId) {
+                return;
+            }
+
+            $this->overviewPhaseId = $currentPhaseId;
+            $this->expandedResourceTaskId = null;
+        }
+
+        $this->lastOverviewWorkflowPhaseId = $currentPhaseId ?: $this->lastOverviewWorkflowPhaseId;
+    }
+
     public function render()
     {
         if (! $this->ready) {
@@ -315,6 +380,9 @@ final class OrderWorkflowSection extends Component
             $job = $query->base($user, $this->orderId);
         }
         $this->preparedWorkflowJob = null;
+
+        $this->alignOverviewWithCurrentStage((int) ($job->workflow_phase_id ?: 0));
+
         if ((bool) config('flowtrack.workflow_display_query_enabled', false)) {
             app(\App\Queries\Orders\OrderWorkflowDisplayQuery::class)->preferDisplayPhase(
                 $job,
@@ -340,8 +408,6 @@ final class OrderWorkflowSection extends Component
             && (int) $task->workflow_phase_id === (int) $this->overviewPhaseId)) {
             $this->expandedResourceTaskId = null;
         }
-        $this->lastOverviewWorkflowPhaseId = $currentPhaseId ?: $this->lastOverviewWorkflowPhaseId;
-
         $master = app(MasterDataService::class);
         $taskStatuses = collect(BoardLaneResolver::taskStatuses($master->active('order_task_status')->pluck('name')));
         $shipmentUrgencies = $master->active('shipment_urgency');
@@ -363,6 +429,19 @@ final class OrderWorkflowSection extends Component
         $context['shipmentMethods'] = $shipmentMethods;
         $context['shipmentUrgencies'] = $shipmentUrgencies;
         $context['shipmentCouriers'] = $couriers;
+
+        // One compact, permission-scoped read supplies counters and the first
+        // assignee for every other stage. Task cards and their full relations
+        // are loaded only for the selected stage; no per-card SQL is issued.
+        $scopedPhaseId = (bool) config('flowtrack.order_three_level_loading_enabled', false)
+            && (bool) config('flowtrack.workflow_display_query_enabled', false)
+            ? app(\App\Queries\Orders\OrderWorkflowDisplayQuery::class)
+                ->selectedTaskPhaseId($job)
+            : null;
+        $context['phaseSummaries'] = $scopedPhaseId !== null
+            ? app(\App\Queries\Orders\OrderPhaseSummaryQuery::class)
+                ->forAuthorizedOrder($job, $user, $job->workflow?->phases ?? collect(), $scopedPhaseId)
+            : [];
 
         $locationMaster = app(LocationMasterDataService::class);
         $shipmentLocationEditorOpen = filled($this->shipmentInlineEditingId);

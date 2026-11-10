@@ -69,6 +69,8 @@ trait ManagesOrderWorkflow
         $key = $workflowActions->automationKey($task);
         $editingCompletedShipmentInformation = $key === 'SHIP_CONFIRM_INFO'
             && \App\Support\OrderDetailPresenter::isCompletedTask($task);
+        $viewingCompletedSample = $key === 'ART_SAMPLE_APPROVAL'
+            && \App\Support\OrderDetailPresenter::isCompletedTask($task);
 
         // A slow Livewire request can be followed by a duplicate click from the
         // old DOM after the first request has already completed this task. When
@@ -77,13 +79,13 @@ trait ManagesOrderWorkflow
         // surface "This task is locked until its workflow stage is active."
         // Treat an already-completed action as an idempotent replay and simply
         // resync the component to the authoritative current phase.
-        if (! $editingCompletedShipmentInformation && $this->ignoreCompletedWorkflowReplay($task)) {
+        if (! $editingCompletedShipmentInformation && ! $viewingCompletedSample && $this->ignoreCompletedWorkflowReplay($task)) {
             return;
         }
 
         if ($editingCompletedShipmentInformation) {
             abort_if(strcasecmp((string) $task->job?->status, 'Cancelled') === 0, 422, 'Cancelled Orders cannot be edited.');
-        } else {
+        } elseif (! $viewingCompletedSample) {
             app(\App\Services\OrderTaskSequenceService::class)->assertStatusActionable($task);
         }
 
@@ -160,6 +162,18 @@ trait ManagesOrderWorkflow
         session()->flash('success', $key === 'NEW_SEND_PO_ARTWORK'
             ? 'Purchase Order handoff completed without email.'
             : 'Artwork handoff completed without email.');
+    }
+
+    /** Select an existing Master Data shipping option in the sample modal. */
+    public function selectSampleShippingMethod(int $methodId, ?int $urgencyId = null): void
+    {
+        abort_unless($this->showOrderWorkflowActionModal && $this->orderWorkflowActionTaskId, 422);
+        $this->orderWorkflowActionPayload['shipping_method_id'] = $methodId;
+        $this->orderWorkflowActionPayload['shipping_urgency_id'] = $urgencyId;
+        $this->resetValidation([
+            'orderWorkflowActionPayload.shipping_method_id',
+            'orderWorkflowActionPayload.shipping_urgency_id',
+        ]);
     }
 
     public function closeOrderWorkflowAction(): void
@@ -621,6 +635,7 @@ trait ManagesOrderWorkflow
 
         $workflowActions = app(\App\Services\OrderWorkflowActionService::class);
         $key = $workflowActions->automationKey($task);
+        if ($key === 'ART_SAMPLE_APPROVAL' && \App\Support\OrderDetailPresenter::isCompletedTask($task)) return;
 
         if ($key === 'SHIP_CONFIRM_INFO' && \App\Support\OrderDetailPresenter::isCompletedTask($task)) {
             try {

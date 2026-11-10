@@ -2,29 +2,28 @@
 
 namespace App\Livewire\Dashboard;
 
+use App\Livewire\Dashboard\Concerns\ReceivesDashboardFilters;
 use App\Livewire\Concerns\RefreshesFromWorkspace;
 use App\Actions\Dashboard\MarkDashboardMentionsRead;
 use App\Queries\Dashboard\DashboardMentionsQuery;
 use Livewire\Attributes\On;
-use Livewire\Attributes\Reactive;
 use Livewire\Component;
 
 class TaggedComments extends Component
 {
     use RefreshesFromWorkspace;
+    use ReceivesDashboardFilters;
     public string $filter = 'all';
 
-    #[Reactive]
     public int $rangeDays = 7;
 
-    #[Reactive]
     public string $clientFilter = '';
 
-    #[Reactive]
     public string $teamFilter = '';
 
-    #[Reactive]
     public string $search = '';
+
+    public int $filterGeneration = 0;
 
     public function placeholder(): string
     {
@@ -53,6 +52,13 @@ class TaggedComments extends Component
             $this->rangeDays,
             $this->search,
         );
+    }
+
+    #[On('dashboard-scoped-refresh')]
+    public function refreshDashboardPanel(): void
+    {
+        // Livewire re-renders only this mounted, authorized panel; no global
+        // dashboard re-query and no mutation of local tab or pagination state.
     }
 
     #[On('flowtrack-notification')]

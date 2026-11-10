@@ -31,12 +31,13 @@ final class SupplierWorkflowProjection
         return in_array($key, self::ACTION_KEYS, true) ? $key : null;
     }
 
-    public const DOCUMENT_KEYS = ['NEW_UPLOAD_PO', 'ART_PREPARE_UPLOAD', 'ART_SAMPLE_APPROVAL'];
+    public const DOCUMENT_KEYS = ['NEW_UPLOAD_PO', 'ART_PREPARE_UPLOAD'];
 
     public static function decisions(string $key): array
     {
         return match ($key) {
-            'NEW_UPLOAD_PO', 'ART_PREPARE_UPLOAD', 'ART_SAMPLE_APPROVAL' => ['upload'],
+            'NEW_UPLOAD_PO', 'ART_PREPARE_UPLOAD' => ['upload'],
+            'ART_SAMPLE_APPROVAL' => ['sample_prepared'],
             'ART_INTERNAL_REVIEW' => ['confirm', 'revise', 'cancel_artwork'],
             'ART_CLIENT_ERP_DECISION' => ['erp_uploaded', 'confirm', 'sample', 'revise'],
             'QC_CHECK' => ['pass', 'issue'],
@@ -51,6 +52,10 @@ final class SupplierWorkflowProjection
     /** Allowed decisions depend on the actual artwork approval state. */
     public static function decisionsForStatus(string $key, string $status): array
     {
+        if ($key === 'ART_SAMPLE_APPROVAL') {
+            return in_array($status, ['Sample: Supplier Preparing', 'Sample: Supplier Revision'], true)
+                ? ['sample_prepared'] : [];
+        }
         if ($key !== 'ART_CLIENT_ERP_DECISION') return self::decisions($key);
 
         $status = strtolower(trim($status));
@@ -83,7 +88,44 @@ final class SupplierWorkflowProjection
         // sequential required-task gating. Resolve from loaded task state only.
         if (self::activeQcResolution($order, $task)) return 'active';
 
+        // The client ERP task deliberately stays incomplete while the single
+        // conditional sample task is handed to the supplier. The normal
+        // first-open-required-task gate can therefore report this sample as
+        // locked in the supplier projection even though FlowTracker has sent
+        // the request. Permit only the supplier's two preparation states,
+        // with the client decision explicitly waiting on this sample and all
+        // other required predecessors complete. This identical guard is used
+        // by the signed buyer endpoint; it is not a portal-only UI override.
+        if (OrderTaskRequirement::automationKey($task) === 'ART_SAMPLE_APPROVAL'
+            && in_array(\App\Services\Orders\SampleWorkflowService::state($task), ['supplier_prepare', 'supplier_revision'], true)
+            && ! OrderDetailPresenter::isCompletedTask($task)
+            && ! $order->completed_at
+            && (int) $task->workflow_phase_id === (int) $order->workflow_phase_id
+            && ! in_array(strtolower(trim((string) $order->status)), ['draft', 'cancelled', 'completed'], true)
+            && $order->relationLoaded('tasks')) {
+            $phaseTasks = $order->tasks->filter(fn ($candidate) =>
+                (int) $candidate->workflow_phase_id === (int) $task->workflow_phase_id);
+            $clientWaiting = $phaseTasks->contains(fn ($candidate) =>
+                OrderTaskRequirement::automationKey($candidate) === 'ART_CLIENT_ERP_DECISION'
+                && strcasecmp(trim((string) $candidate->status), 'Waiting for Sample Approval') === 0
+                && ! OrderDetailPresenter::isCompletedTask($candidate));
+            $predecessorsComplete = $phaseTasks->every(fn ($candidate) =>
+                (int) $candidate->id === (int) $task->id
+                || ! OrderTaskRequirement::isRequired($candidate)
+                || OrderTaskRequirement::automationKey($candidate) === 'ART_CLIENT_ERP_DECISION'
+                || OrderDetailPresenter::isCompletedTask($candidate)
+                || OrderDetailPresenter::isSkippedTask($candidate));
+            if ($clientWaiting && $predecessorsComplete) return 'active';
+        }
+
         $mode = OrderDetailPresenter::taskMode($order, $task);
+        // Receipt, client decision and onward shipment belong to Main ERP.
+        // The supplier may inspect the same row but must never act in these states.
+        if (OrderTaskRequirement::automationKey($task) === 'ART_SAMPLE_APPROVAL'
+            && ! in_array(\App\Services\Orders\SampleWorkflowService::state($task), ['supplier_prepare', 'supplier_revision'], true)
+            && ! OrderDetailPresenter::isCompletedTask($task)) {
+            return 'locked';
+        }
         $status = strtolower(trim((string) $task->status));
         $key = OrderTaskRequirement::automationKey($task);
         $waitingForClientDecision = $key === 'ART_CLIENT_ERP_DECISION'
@@ -157,6 +199,11 @@ final class SupplierWorkflowProjection
         ]);
         $assigned = SupplierTaskAssignment::query()->where('flow_job_id', $order->id)
             ->where('supplier_id', $supplierId)->pluck('task_id')->flip();
+        $sampleTask = $order->tasks->first(fn ($item) =>
+            OrderTaskRequirement::automationKey($item) === 'ART_SAMPLE_APPROVAL'
+            && \App\Support\OrderDetailPresenter::isConditionalTaskActivated($item));
+        $sampleSnapshot = $sampleTask && $assigned->has((int) $sampleTask->id)
+            ? app(\App\Services\Orders\SampleWorkflowService::class)->snapshot($order, $sampleTask) : [];
         $phases = OrderDetailPresenter::phases($order);
         // Resolve current artwork evidence only for the supplier actually
         // assigned an active artwork review/upload task. No new page-wide query.
@@ -171,9 +218,16 @@ final class SupplierWorkflowProjection
             $required = $tasks->filter(fn ($task) => OrderTaskRequirement::isRequired($task));
             $phaseRows = [];
             foreach ($tasks as $i => $task) {
+                $isSample = OrderTaskRequirement::automationKey($task) === 'ART_SAMPLE_APPROVAL';
+                // Do not show the supplier a request which FlowTracker has not sent.
+                if ($isSample && \App\Services\Orders\SampleWorkflowService::state($task) === 'request') continue;
                 $mode = self::taskMode($order, $task);
                 $key = self::actionKey(OrderTaskRequirement::automationKey($task), (int) $phase->sequence);
+                $clientSampleDecided = $key === 'ART_CLIENT_ERP_DECISION'
+                    && strcasecmp(trim((string) $task->status), 'Waiting for Sample Approval') === 0;
                 $isAssigned = $assigned->has((int) $task->id);
+                $supplierSample = $isSample && $isAssigned ? $sampleSnapshot : [];
+                $sampleDisplay = $isSample ? \App\Services\Orders\SampleWorkflowService::supplierPresentation($task, $supplierSample) : null;
                 $isQcDocumentTask = $isAssigned && in_array($key, ['QC_CHECK', 'QC_ISSUE'], true);
                 // A QC attachment is independent of task completion, just like
                 // FlowTracker's QC Document link. No new queries: task documents
@@ -185,7 +239,9 @@ final class SupplierWorkflowProjection
                 // Scheduling dates are buyer-managed: an assigned supplier can view this
                 // task but cannot set an estimated delivery date through the portal.
                 $canAct = $isAssigned && $mode === 'active' && $key !== null
-                    && $key !== 'PROD_SET_ESTIMATED_DELIVERY';
+                    && ! in_array($key, ['PROD_SET_ESTIMATED_DELIVERY', 'ART_CLIENT_ERP_DECISION'], true)
+                    && (! $isSample || in_array(\App\Services\Orders\SampleWorkflowService::state($task),
+                        ['supplier_prepare', 'supplier_revision'], true));
                 $reviewArtwork = [];
                 $replaceArtwork = [];
                 if ($canAct && $artworkUpload && in_array($key, ['ART_INTERNAL_REVIEW', 'ART_CLIENT_ERP_DECISION', 'ART_PREPARE_UPLOAD'], true)) {
@@ -207,9 +263,12 @@ final class SupplierWorkflowProjection
                 $phaseRows[] = [
                     'id' => (int) $task->id,
                     'code' => mb_substr(OrderDetailPresenter::taskDisplayCode($phase, $task, $i), 0, 40),
-                    'title' => mb_substr((string) $task->title, 0, 255),
+                    'title' => $sampleDisplay['title'] ?? mb_substr((string) $task->title, 0, 255),
                     'status' => mb_substr((string) ($task->status ?: 'Ready'), 0, 100),
-                    'mode' => $mode, 'required' => OrderTaskRequirement::isRequired($task),
+                    'display_status' => $clientSampleDecided ? 'Completed' : ($sampleDisplay['status'] ?? null),
+                    'sample' => $supplierSample,
+                    'sample_description' => $sampleDisplay['description'] ?? null,
+                    'mode' => $clientSampleDecided ? 'done' : $mode, 'required' => OrderTaskRequirement::isRequired($task),
                     'assignee' => $key === 'PROD_SET_ESTIMATED_DELIVERY'
                         ? 'FlowTracker team'
                         : ($isAssigned ? 'Your company' : ($task->assignee?->name ?: 'Unassigned')),

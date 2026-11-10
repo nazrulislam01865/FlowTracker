@@ -54,7 +54,7 @@ class OrderWorkflowActionService
         'receive & process payment' => 'PAY_PROCESS',
     ];
 
-    private const DOCUMENT_ACTIONS = ['NEW_UPLOAD_PO', 'ART_PREPARE_UPLOAD', 'ART_SAMPLE_APPROVAL'];
+    private const DOCUMENT_ACTIONS = ['NEW_UPLOAD_PO', 'ART_PREPARE_UPLOAD'];
 
     public function automationKey(Task $task): ?string
     {
@@ -85,7 +85,7 @@ class OrderWorkflowActionService
             'ART_CLIENT_ERP_DECISION' => str_contains($status, 'waiting for client') || str_contains($status, 'client approval')
                 ? 'Record Client Decision'
                 : 'Artwork Uploaded to Client ERP',
-            'ART_SAMPLE_APPROVAL' => 'Upload Sample Approval',
+            'ART_SAMPLE_APPROVAL' => \App\Services\Orders\SampleWorkflowService::presentation($task)['action'],
             'PROD_SET_ESTIMATED_DELIVERY' => 'Set date',
             'PROD_START' => 'Production Ongoing',
             'PROD_ISSUE' => 'Monitor Production',
@@ -151,6 +151,12 @@ class OrderWorkflowActionService
                     'copy' => 'Confirm that the latest artwork has been uploaded to the client ERP.',
                     'choices' => ['erp_uploaded' => 'Artwork Uploaded'],
                 ],
+            'ART_SAMPLE_APPROVAL' => [
+                'variant' => 'sample_workflow',
+                'title' => \App\Services\Orders\SampleWorkflowService::presentation($task)['title'],
+                'copy' => \App\Services\Orders\SampleWorkflowService::presentation($task)['description'],
+                'choices' => [],
+            ],
             'PROD_SET_ESTIMATED_DELIVERY' => [
                 'variant' => 'estimated_delivery',
                 'title' => 'Set estimated delivery date',
@@ -374,6 +380,15 @@ class OrderWorkflowActionService
             // Keep the format aligned with finance invoices while accounting for
             // both finance records and earlier workflow-prepared invoices.
             $payload['invoice_number'] = $this->nextWorkflowInvoiceNumber($job);
+        }
+
+        if ($key === 'ART_SAMPLE_APPROVAL') {
+            $payload['sample'] = app(\App\Services\Orders\SampleWorkflowService::class)->snapshot($job, $task);
+            $payload['sample_history'] = app(\App\Services\Orders\SampleWorkflowService::class)->history($job, $task);
+            $payload['sample_kind'] = 'physical';
+            $payload['received_on'] = app(WorkspaceSettingsService::class)->localToday()->toDateString();
+            $payload['shipping_method_id'] = null;
+            $payload['shipping_urgency_id'] = null;
         }
 
         return $payload;
@@ -604,6 +619,22 @@ class OrderWorkflowActionService
                 return $this->complete($locked, $actor)->refresh();
             }
 
+            if ($key === 'ART_SAMPLE_APPROVAL') {
+                $next = app(\App\Services\Orders\SampleWorkflowService::class)
+                    ->advance($locked, $job, $actor, $decision, $payload);
+                if ($next === 'approved') {
+                    $this->complete($locked, $actor);
+                    $waiting = Task::query()->where('flow_job_id', $job->id)
+                        ->where('workflow_phase_id', $locked->workflow_phase_id)
+                        ->where('status', 'Waiting for Sample Approval')
+                        ->with('setupTemplate')->get()
+                        ->first(fn (Task $candidate) => $this->automationKey($candidate) === 'ART_CLIENT_ERP_DECISION');
+                    abort_unless($waiting, 422, 'The client artwork approval task is missing.');
+                    $this->complete($waiting, $actor);
+                }
+                return $locked->refresh();
+            }
+
             if ($key === 'ART_CLIENT_ERP_DECISION' && $decision === 'erp_uploaded') {
                 $reference = trim((string) ($payload['erp_reference'] ?? ''));
                 $locked->update(['status' => 'Waiting for Client', 'completed_at' => null, 'progress' => 60]);
@@ -643,6 +674,21 @@ class OrderWorkflowActionService
                     'completed_at' => null,
                     'progress' => 0,
                     'start_date' => $sample->start_date ?: app(WorkspaceSettingsService::class)->localToday(),
+                ]);
+                // A new artwork approval starts a fresh sample decision. A
+                // previously approved sample from an older artwork revision
+                // must never make this new conditional task complete-able.
+                $job->activities()->create([
+                    'user_id' => $actor->id,
+                    'event' => \App\Services\Orders\SampleWorkflowService::EVENT,
+                    'description' => 'Client approved artwork and requires a new sample.',
+                    'meta' => [
+                        'task_id' => (int) $sample->id, 'state' => 'request',
+                        'kind' => '', 'request_notes' => '', 'supplier_note' => '',
+                        'email_to' => '', 'image_name' => '', 'received_on' => '',
+                        'receipt_note' => '', 'review_note' => '', 'revisions' => 0,
+                        'shipping' => null, 'cycle' => 0,
+                    ],
                 ]);
                 $job->activities()->create([
                     'user_id' => $actor->id,
@@ -1101,18 +1147,10 @@ class OrderWorkflowActionService
         // completion/phase-advance side effects for a second time.
         if ($task->completed_at || strcasecmp(trim((string) $task->status), 'Completed') === 0) return;
 
-        if ($key === 'ART_SAMPLE_APPROVAL') {
-            $this->complete($task, $actor);
-            $waiting = Task::query()
-                ->where('flow_job_id', $task->flow_job_id)
-                ->where('workflow_phase_id', $task->workflow_phase_id)
-                ->where('status', 'Waiting for Sample Approval')
-                ->with('setupTemplate')
-                ->get()
-                ->first(fn (Task $candidate) => $this->automationKey($candidate) === 'ART_CLIENT_ERP_DECISION');
-            if ($waiting) $this->complete($waiting, $actor);
-            return;
-        }
+        // Sample images are supporting evidence, not client approval.
+        // Only the explicit sample decision and (for physical samples) onward
+        // shipment may complete this conditional workflow task.
+        if ($key === 'ART_SAMPLE_APPROVAL') return;
 
         // PO and artwork upload are file-backed actions in the prototype.
         $this->complete($task, $actor);

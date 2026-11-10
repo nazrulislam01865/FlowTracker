@@ -172,6 +172,12 @@ final class SupplierDefaultTaskAssigner
         }
     }
 
+    /** Reuse the canonical eligibility check for one conditional sample handoff. */
+    public function uniqueSupplierForOrder(int $orderId): ?int
+    {
+        return self::uniqueSupplierId($this->orderSupplierIds($orderId));
+    }
+
     /** @return list<int> */
     private function orderSupplierIds(int $orderId): array
     {
