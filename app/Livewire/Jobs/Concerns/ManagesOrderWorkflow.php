@@ -616,6 +616,32 @@ trait ManagesOrderWorkflow
         ]);
     }
 
+    /** Open the original Single / Split PO generator; never create a PO on navigation. */
+    public function createOptionalSupplierPo(int $taskId): void
+    {
+        abort_unless($this->selectedJobId && $this->detailTab === 'overview', 422);
+        $actor = auth()->user();
+        $task = app(\App\Services\TaskService::class)->visibleQuery($actor)
+            ->with('setupTemplate')->where('flow_job_id', $this->selectedJobId)->findOrFail($taskId);
+        abort_unless(app(\App\Services\OrderWorkflowActionService::class)->automationKey($task) === 'ART_SUPPLIER_PO_OPTIONAL', 403);
+        abort_unless(app(\App\Services\AccessControlService::class)->canEditTask($actor, $task), 403);
+        // The PO service validates workflow readiness again when the user submits the popup.
+        $this->redirect(route('orders.purchase-orders', ['order' => (int) $task->flow_job_id, 'create' => 1]), navigate: true);
+    }
+
+    /** Reuse the existing signed-in artwork action for the separate Skip PO button. */
+    public function skipOptionalSupplierPo(int $taskId): void
+    {
+        abort_unless($this->selectedJobId && $this->detailTab === 'overview', 422);
+        $task = app(\App\Services\TaskService::class)->visibleQuery(auth()->user())
+            ->with('setupTemplate')->where('flow_job_id', $this->selectedJobId)->findOrFail($taskId);
+        abort_unless(app(\App\Services\OrderWorkflowActionService::class)->automationKey($task) === 'ART_SUPPLIER_PO_OPTIONAL', 403);
+        $this->openOrderWorkflowAction($taskId);
+        if ($this->showOrderWorkflowActionModal) {
+            $this->submitOrderWorkflowAction('skip');
+        }
+    }
+
     public function submitOrderWorkflowAction(string $decision = 'confirm'): void
     {
         // A submit can arrive after the modal has already been closed by the

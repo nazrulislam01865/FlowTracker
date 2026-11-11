@@ -3430,6 +3430,17 @@ class LegacyJobService
         if (!$isDedicatedOrderWorkflow && !$isPrototypeOrderRuntime && !$job->phase?->auto_advance_on_ready) return $job;
 
         if (JobDetailPresenter::blockers($job)->isEmpty()) {
+            // A deliberate yes/no choice for the optional PO step must be
+            // possible after sample approval. Reuse the canonical loaded task
+            // graph; there is no additional SQL in the phase advance gate.
+            if (strcasecmp((string) ($job->phase?->name ?: ''), 'Artwork') === 0
+                && $job->tasks->contains(fn (Task $task) =>
+                    $workflowActions->automationKey($task) === 'ART_SUPPLIER_PO_OPTIONAL'
+                    && !\App\Support\OrderDetailPresenter::isCompletedTask($task)
+                    && !\App\Support\OrderDetailPresenter::isSkippedTask($task)
+                )) {
+                return $job;
+            }
             return $this->completePhase($job, $actor, true);
         }
 

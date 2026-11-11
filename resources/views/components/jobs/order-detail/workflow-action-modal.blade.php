@@ -1058,6 +1058,8 @@
                     <button type="button" wire:click="submitOrderWorkflowAction('revise')" wire:loading.attr="disabled" wire:target="submitOrderWorkflowAction"><span class="ft-prototype-choice-icon">↻</span><strong>Client Requested Revision</strong><small>Restart the artwork revision cycle</small></button>
                     <button type="button" wire:click="submitOrderWorkflowAction('approved')" wire:loading.attr="disabled" wire:target="submitOrderWorkflowAction"><span class="ft-prototype-choice-icon">✓</span><strong>Client Approved Artwork</strong><small>Continue to sample decision</small></button>
                 </div>
+            @elseif($variant === 'optional_supplier_po')
+                <p class="ft-prototype-modal-copy">The supplier Purchase Order is optional. Use Create PO or Skip PO on this Artwork task after the sample step. Creating a PO copies the Order product values without changing the original Order.</p>
             @elseif($variant === 'estimated_delivery')
                 <div class="ft-prototype-required-date-panel">
                     <div class="ft-prototype-required-date-icon">*</div>

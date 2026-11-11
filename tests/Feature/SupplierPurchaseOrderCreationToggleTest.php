@@ -94,9 +94,9 @@ final class SupplierPurchaseOrderCreationToggleTest extends TestCase
         $workspace = file_get_contents(app_path('Livewire/Orders/PurchaseOrders.php'));
 
         $this->assertStringContainsString("@if(config('flowtrack.supplier_po_creation_enabled', false))", $sidebar);
-        $this->assertStringContainsString("!\$isCancelled && config('flowtrack.supplier_po_creation_enabled', false)", $detail);
-        $this->assertStringContainsString("@if(config('flowtrack.supplier_po_creation_enabled', false))", $action);
-        $this->assertStringContainsString("!config('flowtrack.supplier_po_creation_enabled', false) && !\$poRows", $page);
+        $this->assertStringNotContainsString('>Generate PO</x-ui.button>', $detail);
+        $this->assertStringContainsString("@if(config('flowtrack.supplier_po_creation_enabled', false) && \$generated)", $action);
+        $this->assertStringContainsString('@if(!$poRows)', $page);
         $this->assertStringContainsString('public function sendSupplierPurchaseOrder(int $poId)', $workspace);
         $this->assertStringContainsString('public function sendAllSupplierPurchaseOrders()', $workspace);
     }

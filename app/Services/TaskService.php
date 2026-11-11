@@ -635,6 +635,15 @@ class TaskService
                 throw ValidationException::withMessages(['taskCompletion' => 'Complete the required sample workflow before approving the artwork task.']);
             }
         }
+        if ($automationKey === 'ART_SUPPLIER_PO_OPTIONAL') {
+            // Only explicit generation satisfies this optional task. Users
+            // may choose Skip using the dedicated workflow action instead.
+            if (!\App\Models\SupplierPurchaseOrder::query()
+                ->where('flow_job_id', $task->flow_job_id)->whereNull('archived_at')->exists()) {
+                throw ValidationException::withMessages(['taskCompletion' => 'Create the supplier Purchase Order first, or choose Skip PO.']);
+            }
+            return;
+        }
         if ($automationKey === 'ART_SAMPLE_APPROVAL') {
             $job = $task->job ?: FlowJob::query()->findOrFail($task->flow_job_id);
             $snapshot = app(\App\Services\Orders\SampleWorkflowService::class)->snapshot($job, $task);
@@ -674,6 +683,17 @@ class TaskService
         $progress = (int) round(($done / $total) * 100);
         $task->update(['progress' => min(99, $progress)]);
         app(\App\Services\Orders\OrderWorkflowSummaryService::class)->markStale((int) $task->flow_job_id);
+    }
+
+    /**
+     * Reuse the canonical completion pipeline for a supplier-authenticated PO
+     * task whose assignee must remain Supplier, not the FlowTracker delegate.
+     * Call only after the signed bridge has verified its task assignment and
+     * committed the task status inside the current Order transaction.
+     */
+    public function reconcileAfterVerifiedSupplierCompletion(Task $task, User $delegate): void
+    {
+        $this->refreshJobState($task, $delegate);
     }
 
     private function refreshJobState(Task $task, User $actor): void

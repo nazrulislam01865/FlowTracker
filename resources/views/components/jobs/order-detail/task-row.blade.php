@@ -233,7 +233,7 @@
         </div>
         @if($canAssignTask && !$isCancelled)
             <div x-cloak x-show="editing" class="ft-order-assignee-picker">
-                <x-ui.inline-remote-user :value="$supplierAssigned ? 'supplier' : ($task->assignee_id ?? '')" :selected-label="$assigneeName" parent-type="job" :parent-id="$job->id" variant="compact" :menu-width="300" :allow-supplier="\App\Services\SupplierBridge\SupplierWorkflowProjection::actionKey($automationKey, (int) ($task->phase?->sequence ?? 0)) !== null" external-trigger />
+                <x-ui.inline-remote-user :value="$supplierAssigned ? 'supplier' : ($task->assignee_id ?? '')" :selected-label="$assigneeName" parent-type="job" :parent-id="$job->id" variant="compact" :menu-width="300" :allow-supplier="($automationKey === 'ART_SUPPLIER_PO_OPTIONAL') || \App\Services\SupplierBridge\SupplierWorkflowProjection::actionKey($automationKey, (int) ($task->phase?->sequence ?? 0)) !== null" external-trigger />
             </div>
             <x-ui.inline-save-state compact />
         @endif
@@ -358,7 +358,10 @@
             <button type="button" class="btn small" wire:click="viewTask({{ $task->id }})">View decision</button>
         @elseif($mode === 'active' && $isCurrentPhase)
             @if($canEditTask)
-                @if(($workflowActionType === 'document' || ($requiresDocument && $requiredBeforeCompletion && $taskDocuments->isEmpty() && $taskLinks->isEmpty())) && ($canUploadDocument || $canLinkDocument))
+                @if($automationKey === 'ART_SUPPLIER_PO_OPTIONAL')
+                    <button type="button" class="btn small primary" wire:click="createOptionalSupplierPo({{ $task->id }})" wire:loading.attr="disabled" wire:target="createOptionalSupplierPo({{ $task->id }})">Create PO</button>
+                    <button type="button" class="btn small" wire:click="skipOptionalSupplierPo({{ $task->id }})" wire:loading.attr="disabled" wire:target="skipOptionalSupplierPo({{ $task->id }})">Skip PO</button>
+                @elseif(($workflowActionType === 'document' || ($requiresDocument && $requiredBeforeCompletion && $taskDocuments->isEmpty() && $taskLinks->isEmpty())) && ($canUploadDocument || $canLinkDocument))
                     <button type="button" class="btn small primary" wire:click="openOrderWorkflowAction({{ $task->id }})" wire:loading.attr="disabled" wire:target="openOrderWorkflowAction({{ $task->id }})">{{ $workflowActionLabel }}</button>
                 @else
                     <button type="button" class="btn small primary" wire:click="openOrderWorkflowAction({{ $task->id }})" wire:loading.attr="disabled" wire:target="openOrderWorkflowAction({{ $task->id }})">{{ $workflowActionLabel }}</button>

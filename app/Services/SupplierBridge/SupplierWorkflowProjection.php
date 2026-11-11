@@ -17,7 +17,7 @@ final class SupplierWorkflowProjection
     public const ACTION_KEYS = [
         'NEW_UPLOAD_PO', 'NEW_SEND_PO_ARTWORK',
         'ART_PREPARE_UPLOAD', 'ART_INTERNAL_REVIEW', 'ART_SEND_ORDER_TEAM',
-        'ART_CLIENT_ERP_DECISION', 'ART_SAMPLE_APPROVAL',
+        'ART_CLIENT_ERP_DECISION', 'ART_SAMPLE_APPROVAL', 'ART_SUPPLIER_PO_OPTIONAL',
         'PROD_SET_ESTIMATED_DELIVERY', 'PROD_START', 'PROD_ISSUE', 'PROD_FINISH',
         'QC_CHECK', 'QC_ISSUE', 'QC_APPROVE_SHIPMENT',
         'SHIP_CONFIRM_INFO', 'SHIP_LABEL', 'SHIP_PACKAGE', 'GENERIC_TASK',
@@ -38,6 +38,7 @@ final class SupplierWorkflowProjection
         return match ($key) {
             'NEW_UPLOAD_PO', 'ART_PREPARE_UPLOAD' => ['upload'],
             'ART_SAMPLE_APPROVAL' => ['sample_prepared'],
+            'ART_SUPPLIER_PO_OPTIONAL' => ['skip'],
             'ART_INTERNAL_REVIEW' => ['confirm', 'revise', 'cancel_artwork'],
             'ART_CLIENT_ERP_DECISION' => ['erp_uploaded', 'confirm', 'sample', 'revise'],
             'QC_CHECK' => ['pass', 'issue'],
@@ -119,6 +120,19 @@ final class SupplierWorkflowProjection
         }
 
         $mode = OrderDetailPresenter::taskMode($order, $task);
+        if (OrderTaskRequirement::automationKey($task) === 'ART_SUPPLIER_PO_OPTIONAL'
+            && (int) $task->workflow_phase_id === (int) $order->workflow_phase_id
+            && $order->relationLoaded('tasks') && ! $order->completed_at
+            && ! (bool) ($order->active_hold_exists ?? false)
+            && ! in_array(strtolower(trim((string) $order->status)), ['draft', 'cancelled', 'completed'], true)
+            && ! OrderDetailPresenter::isCompletedTask($task)
+            && ! OrderDetailPresenter::isSkippedTask($task)
+            && ! $order->tasks->where('workflow_phase_id', $task->workflow_phase_id)
+                ->contains(fn ($other) => OrderTaskRequirement::isRequired($other)
+                    && ! OrderDetailPresenter::isCompletedTask($other)
+                    && ! OrderDetailPresenter::isSkippedTask($other))) {
+            return 'active';
+        }
         // Receipt, client decision and onward shipment belong to Main ERP.
         // The supplier may inspect the same row but must never act in these states.
         if (OrderTaskRequirement::automationKey($task) === 'ART_SAMPLE_APPROVAL'

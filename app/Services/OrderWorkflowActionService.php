@@ -31,6 +31,7 @@ class OrderWorkflowActionService
         'send artwork to order team' => 'ART_SEND_ORDER_TEAM',
         'client erp / approval' => 'ART_CLIENT_ERP_DECISION',
         'sample approval (when required)' => 'ART_SAMPLE_APPROVAL',
+        'create supplier purchase order (optional)' => 'ART_SUPPLIER_PO_OPTIONAL',
         'set estimated delivery date' => 'PROD_SET_ESTIMATED_DELIVERY',
         'start production' => 'PROD_START',
         'monitor / resolve production issue' => 'PROD_ISSUE',
@@ -86,6 +87,7 @@ class OrderWorkflowActionService
                 ? 'Record Client Decision'
                 : 'Artwork Uploaded to Client ERP',
             'ART_SAMPLE_APPROVAL' => \App\Services\Orders\SampleWorkflowService::presentation($task)['action'],
+            'ART_SUPPLIER_PO_OPTIONAL' => 'Create PO',
             'PROD_SET_ESTIMATED_DELIVERY' => 'Set date',
             'PROD_START' => 'Production Ongoing',
             'PROD_ISSUE' => 'Monitor Production',
@@ -156,6 +158,12 @@ class OrderWorkflowActionService
                 'title' => \App\Services\Orders\SampleWorkflowService::presentation($task)['title'],
                 'copy' => \App\Services\Orders\SampleWorkflowService::presentation($task)['description'],
                 'choices' => [],
+            ],
+            'ART_SUPPLIER_PO_OPTIONAL' => [
+                'variant' => 'optional_supplier_po',
+                'title' => 'Supplier Purchase Order (optional)',
+                'copy' => 'After artwork approval and any required sample, create the supplier PO or skip this step.',
+                'choices' => ['skip' => 'Skip Purchase Order'],
             ],
             'PROD_SET_ESTIMATED_DELIVERY' => [
                 'variant' => 'estimated_delivery',
@@ -601,6 +609,21 @@ class OrderWorkflowActionService
                 10000,
                 'orderWorkflowActionComment',
             ) ?? '';
+
+            if ($key === 'ART_SUPPLIER_PO_OPTIONAL') {
+                if ($decision !== 'skip') {
+                    throw ValidationException::withMessages(['orderWorkflowActionPayload' => 'Open the Purchase Orders workspace to create a PO, or choose Skip.']);
+                }
+                $locked->update(['status' => 'Skipped', 'order_task_status_id' => null, 'completed_at' => null, 'progress' => 0]);
+                $job->activities()->create([
+                    'user_id' => $actor->id,
+                    'event' => 'job.supplier_po_optional_skipped',
+                    'description' => 'Optional supplier Purchase Order step skipped.',
+                    'meta' => ['task_id' => (int) $locked->id],
+                ]);
+                app(JobService::class)->maybeAutoAdvance($job, $actor);
+                return $locked->refresh();
+            }
 
             if ($key === 'ART_INTERNAL_REVIEW' && $decision === 'revise') {
                 $activity = $this->restartArtwork($locked, $actor, 'Internal artwork revision requested', $payload, $comment);

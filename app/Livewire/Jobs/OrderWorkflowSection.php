@@ -317,7 +317,7 @@ final class OrderWorkflowSection extends Component
     {
         // Supplier actions ultimately update a Task, FlowJob or Document.
         // Ignore unrelated workspace settings and administration changes.
-        if ($reason !== null && ! preg_match('/^(Task|FlowJob|Document|FlowJobItem|FlowJobPhaseHistory):/', $reason)) {
+        if ($reason !== null && ! preg_match('/(?:^|\|)(?:Task|FlowJob|Document|FlowJobItem|FlowJobPhaseHistory):/', $reason)) {
             $this->skipRender();
         }
     }
