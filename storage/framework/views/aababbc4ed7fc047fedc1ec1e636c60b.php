@@ -1,3 +1,7 @@
+<?php
+    $supplierProductEmbedded = auth()->check()
+        && app(\App\Services\SupplierBridge\SupplierProductModuleAccess::class)->isPortalActor(auth()->user());
+?>
 <!DOCTYPE html>
 <html lang="<?php echo e(str_replace('_','-',app()->getLocale())); ?>">
 <head>
@@ -5,7 +9,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="<?php echo e(csrf_token()); ?>">
     <meta name="flowtrack-session-timeout" content="<?php echo e((int) config('session.lifetime', 30) * 60); ?>">
-    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(auth()->guard()->check()): ?>
+    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(auth()->check() && ! $supplierProductEmbedded): ?>
         <meta name="flowtrack-session-status-url" content="<?php echo e(route('session.status')); ?>">
         <meta name="flowtrack-session-recover-url" content="<?php echo e(route('session.recover')); ?>">
         <meta name="flowtrack-logout-url" content="<?php echo e(route('logout')); ?>">
@@ -20,10 +24,10 @@
         data-fallback-src="<?php echo e(asset('images/flowtrack-image-fallback.svg')); ?>"
     ></script>
     <?php echo app('Illuminate\Foundation\Vite')('resources/css/application/prelude.css'); ?>
-    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(auth()->guard()->check()): ?>
+    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(auth()->check() && ! $supplierProductEmbedded): ?>
         <meta name="flowtrack-notification-count-url" content="<?php echo e(route('notifications.unread-count')); ?>">
     <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
-    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(auth()->check() && app(\App\Services\ReverbChannelService::class)->enabled()): ?>
+    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(auth()->check() && ! $supplierProductEmbedded && app(\App\Services\ReverbChannelService::class)->enabled()): ?>
         <meta name="flowtrack-reverb-key" content="<?php echo e(data_get(config('reverb'), 'apps.apps.0.key')); ?>">
         <meta name="flowtrack-reverb-host" content="<?php echo e(data_get(config('reverb'), 'apps.apps.0.options.host')); ?>">
         <meta name="flowtrack-reverb-port" content="<?php echo e(data_get(config('reverb'), 'apps.apps.0.options.port', 443)); ?>">
@@ -75,6 +79,12 @@
     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(request()->routeIs('orders.purchase-orders')): ?>
         <link rel="stylesheet" href="<?php echo e(asset('css/flowtrack-purchase-orders.css')); ?>?v=4">
     <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(request()->is('master-data')): ?>
+        <link rel="stylesheet" href="<?php echo e(asset('css/flowtrack-product-pricing-ux.css')); ?>?v=1">
+    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(request()->routeIs('settings.supplier-product-access')): ?>
+        <link rel="stylesheet" href="<?php echo e(asset('css/flowtrack-supplier-product-settings.css')); ?>?v=1">
+    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(request()->routeIs('supplier-reminder.index')): ?>
         <link rel="stylesheet" href="<?php echo e(asset('css/flowtrack-supplier-reminders.css')); ?>?v=7">
     <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
@@ -102,16 +112,28 @@
         data-navigate-once
         defer
     ></script>
+    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($supplierProductEmbedded): ?>
+        <style>
+            body.ft-supplier-product-embedded { min-width: 0; }
+            body.ft-supplier-product-embedded .app { display:block; min-width:0; }
+            body.ft-supplier-product-embedded main.main { margin:0 !important; width:100% !important; min-width:0; max-width:none !important; }
+            body.ft-supplier-product-embedded main.main > .content { width:100%; max-width:none !important; margin:0; min-width:0; }
+        </style>
+    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
 </head>
-<body class="<?php echo e(request()->routeIs('dashboard', 'team-performance.report') ? 'ft-management-dashboard-page' : ''); ?>">
+<body class="<?php echo e(request()->routeIs('dashboard', 'team-performance.report') ? 'ft-management-dashboard-page' : ''); ?> <?php echo e($supplierProductEmbedded ? 'ft-supplier-product-embedded' : ''); ?>">
 <div class="app">
     
-    <?php app("livewire")->forceAssetInjection(); ?><div x-persist="<?php echo e('flowtrack-sidebar'); ?>">
-        <?php echo $__env->make('layouts.partials.sidebar', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
-    </div>
-    <div id="sidebarShade" class="mobile-sidebar-shade"></div>
+    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if (! ($supplierProductEmbedded)): ?>
+        <?php app("livewire")->forceAssetInjection(); ?><div x-persist="<?php echo e('flowtrack-sidebar'); ?>">
+            <?php echo $__env->make('layouts.partials.sidebar', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
+        </div>
+        <div id="sidebarShade" class="mobile-sidebar-shade"></div>
+    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
     <main class="main">
-        <?php echo $__env->make('layouts.partials.topbar', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
+        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if (! ($supplierProductEmbedded)): ?>
+            <?php echo $__env->make('layouts.partials.topbar', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
+        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
         <?php if (isset($component)) { $__componentOriginald3006faa8aaaa46125e3ed862ca54da4 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginald3006faa8aaaa46125e3ed862ca54da4 = $attributes; } ?>
 <?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.async-feedback','data' => []] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
@@ -161,7 +183,9 @@
             <?php echo $__env->yieldContent('content'); ?>
         </div>
     </main>
-    <?php echo $__env->make('layouts.partials.mobile-bottom', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
+    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if (! ($supplierProductEmbedded)): ?>
+        <?php echo $__env->make('layouts.partials.mobile-bottom', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
+    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
 </div>
 <?php echo \Livewire\Mechanisms\FrontendAssets\FrontendAssets::scripts(); ?>
 
